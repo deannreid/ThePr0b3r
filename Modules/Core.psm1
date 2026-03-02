@@ -1,0 +1,849 @@
+# ================================================================
+# Module  : Core.psm1
+# ================================================================
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# ------------------------------------------------------------
+# Ensure ProberState Exists
+# ------------------------------------------------------------
+if (-not (Get-Variable ProberState -Scope Global -ErrorAction SilentlyContinue)) {
+
+    fncLog "DEBUG" "Core bootstrap creating minimal ProberState"
+
+    $global:ProberState = [pscustomobject]@{
+        Config = [pscustomobject]@{
+            DEBUG         = $false
+            ADVANCED_MODE = $false
+        }
+
+        Tests             = @()
+        Findings          = @()
+        TempDir           = $null
+        EnvProfile        = "Unknown"
+        OperatorTelemetry = $null
+        _LoadedTestIds = @()
+
+
+        RunContext = [pscustomobject]@{
+            RunId     = [guid]::NewGuid()
+            StartTime = Get-Date
+            Host      = $env:COMPUTERNAME
+            User      = $env:USERNAME
+        }
+    }
+
+    fncLog "INFO" "Core created minimal ProberState container"
+}
+
+# ------------------------------------------------------------
+# Ensure Required Properties Exist
+# ------------------------------------------------------------
+$requiredProps = @(
+    @{ Name="Tests";             Value=@() },
+    @{ Name="Findings";          Value=@() },
+    @{ Name="TempDir";           Value=$null },
+    @{ Name="EnvProfile";        Value="Unknown" },
+    @{ Name="OperatorTelemetry"; Value=$null },
+    @{ Name="_LoadedTestIds"; Value=@() }
+
+)
+
+foreach ($p in $requiredProps) {
+    if ($global:ProberState.PSObject.Properties.Name -notcontains $p.Name) {
+
+        fncLog "DEBUG" ("Core adding missing ProberState property: {0}" -f $p.Name)
+
+        $global:ProberState | Add-Member -MemberType NoteProperty -Name $p.Name -Value $p.Value
+    }
+}
+
+# ------------------------------------------------------------
+# Config alias
+# ------------------------------------------------------------
+if (-not (Get-Variable config -Scope Global -ErrorAction SilentlyContinue)) {
+
+    $global:config = $global:ProberState.Config
+    fncLog "DEBUG" "Core initialised global config alias"
+}
+
+# Cosmetic globals
+if (-not (Get-Variable CurrentBlurb -Scope Global -ErrorAction SilentlyContinue)) {
+
+    $global:CurrentBlurb = "Enumerating wisdom"
+    fncLog "DEBUG" "Core initialised default blurb"
+}
+
+function fncGetScriptDirectory {
+
+    fncLog "DEBUG" "fncGetScriptDirectory invoked"
+
+    try {
+        if ($PSScriptRoot) { return $PSScriptRoot }
+        return (Split-Path -Parent $MyInvocation.MyCommand.Path)
+    }
+    catch {
+        fncLogException $_.Exception "fncGetScriptDirectory"
+        return (Get-Location).Path
+    }
+}
+
+function fncInitProberState {
+
+    fncLog "DEBUG" "fncInitProberState invoked"
+
+    if (Get-Variable ProberState -Scope Global -ErrorAction SilentlyContinue) {
+        fncLog "DEBUG" "ProberState already exists - skipping full init"
+        return
+    }
+
+    $global:ProberState = [pscustomobject]@{
+        Config = [pscustomobject]@{
+            DEBUG         = $false
+            ADVANCED_MODE = $false
+        }
+
+        Tests             = @()
+        Findings          = @()
+        TempDir           = $null
+        EnvProfile        = "Unknown"
+        OperatorTelemetry = $null
+        _LoadedTestIds = @()
+
+
+        RunContext = [pscustomobject]@{
+            RunId     = [guid]::NewGuid()
+            StartTime = Get-Date
+            Host      = $env:COMPUTERNAME
+            User      = $env:USERNAME
+        }
+    }
+
+    fncLog "INFO" "ProberState fully initialised via fncInitProberState"
+}
+
+function fncIsAdmin {
+
+    fncLog "DEBUG" "Checking administrative privileges"
+
+    try {
+        $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $p  = New-Object Security.Principal.WindowsPrincipal($id)
+        return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        fncLogException $_.Exception "fncIsAdmin"
+        return $false
+    }
+}
+
+function fncCreateTempDir {
+
+    fncLog "DEBUG" "fncCreateTempDir invoked"
+
+    try {
+        if ($global:ProberState.TempDir -and (Test-Path $global:ProberState.TempDir)) {
+            fncLog "DEBUG" ("Reusing existing temp directory: {0}" -f $global:ProberState.TempDir)
+            return $global:ProberState.TempDir
+        }
+    }
+    catch {
+        fncLogException $_.Exception "fncCreateTempDir existing temp check"
+    }
+
+    if (-not $global:RunLogDir) {
+        throw "RunLogDir not initialised by runner."
+    }
+
+    $path = Join-Path $global:RunLogDir "Temp"
+
+    try {
+        New-Item -ItemType Directory -Path $path -Force | Out-Null
+        $global:ProberState.TempDir = $path
+
+        fncLog "INFO" ("Created temp directory: {0}" -f $path)
+
+        return $path
+    }
+    catch {
+        fncLogException $_.Exception "fncCreateTempDir directory creation"
+        return $null
+    }
+}
+
+function fncCleanupTempDir {
+
+    fncLog "DEBUG" "fncCleanupTempDir invoked"
+
+    try {
+        if ($global:ProberState.TempDir -and (Test-Path $global:ProberState.TempDir)) {
+
+            fncLog "DEBUG" ("Removing temp directory: {0}" -f $global:ProberState.TempDir)
+
+            Remove-Item $global:ProberState.TempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        fncLogException $_.Exception "fncCleanupTempDir"
+    }
+
+    $global:ProberState.TempDir = $null
+}
+
+function fncGetEnvProfile {
+
+    fncLog "DEBUG" "fncGetEnvProfile invoked"
+
+    try {
+
+        $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+
+        $isServer = $false
+        if ($os -and $os.Caption -match "(?i)\bserver\b") { $isServer = $true }
+
+        $isDC = $false
+        if ($cs -and $cs.DomainRole -ge 4) { $isDC = $true }
+
+        if ($isDC) {
+            fncLog "DEBUG" "Environment profile detected as Domain Controller"
+            return "Domain"
+        }
+
+        if ($isServer) {
+            fncLog "DEBUG" "Environment profile detected as Server"
+            return "Server"
+        }
+
+        fncLog "DEBUG" "Environment profile detected as Workstation"
+        return "Workstation"
+    }
+    catch {
+        fncLogException $_.Exception "fncGetEnvProfile"
+        return "Unknown"
+    }
+}
+
+# ------------------------------------------------------------
+# Function: fncAskYesNo
+# ------------------------------------------------------------
+function fncAskYesNo {
+    param(
+        [Parameter(Mandatory=$true)][string]$Question,
+        [ValidateSet("Y","N")][string]$Default = "N"
+    )
+
+    try { if (Get-Command fncLog -ErrorAction SilentlyContinue) { fncLog "DEBUG" ("Prompt issued: {0}" -f $Question) } } catch {}
+
+    $defTxt = if ($Default -eq "Y") { "Y/n" } else { "y/N" }
+
+    while ($true) {
+        $ans = Read-Host ("{0} ({1})" -f $Question, $defTxt)
+
+        if ([string]::IsNullOrWhiteSpace($ans)) {
+            return ($Default -eq "Y")
+        }
+
+        switch ($ans.Trim().ToLower()) {
+            "y"   { return $true }
+            "yes" { return $true }
+            "n"   { return $false }
+            "no"  { return $false }
+            default { fncPrintMessage "Please enter Y or N." "warning" }
+        }
+    }
+}
+
+# ------------------------------------------------------------
+# Function: fncPause
+# ------------------------------------------------------------
+function fncPause {
+    param([string]$Message = "Press Enter to continue")
+
+    try { if (Get-Command fncLog -ErrorAction SilentlyContinue) { fncLog "DEBUG" "Pause invoked" } } catch {}
+
+    Read-Host $Message | Out-Null
+}
+
+function fncTryGetRegistryValue {
+
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Name,
+        $Default = $null
+    )
+
+    fncLog "DEBUG" ("Registry lookup requested: {0} -> {1}" -f $Path,$Name)
+
+    try {
+
+        if (-not (Test-Path $Path)) { return $Default }
+
+        $item = Get-ItemProperty $Path -ErrorAction Stop
+        if ($null -eq $item) { return $Default }
+
+        if ($item.PSObject.Properties.Name -notcontains $Name) {
+            return $Default
+        }
+
+        return $item.$Name
+    }
+    catch {
+        fncLogException $_.Exception "fncTryGetRegistryValue"
+        return $Default
+    }
+}
+
+function fncInitFindings {
+
+    fncLog "DEBUG" "Initialising findings container"
+    $global:ProberState.Findings = @()
+}
+
+function fncAddFinding {
+
+  param(
+    [Parameter(Mandatory=$true)][string]$Id,
+
+    [string]$TestId = "",
+    [string]$Category = "Uncategorised",
+    [string]$Title = "",
+
+    [ValidateSet("Info","Low","Medium","High","Critical")]
+    [string]$Severity = "Info",
+
+    [string]$Status = "",
+    [string]$Message = "",
+
+    [string]$Recommendation = "",
+
+    [string]$Exploitation = "",
+    [string]$Remediation  = ""
+  )
+
+  fncLog "DEBUG" ("Adding finding: {0} ({1})" -f $Id, $Severity)
+
+  if (-not $global:ProberState.Findings) {
+    $global:ProberState.Findings = @()
+  }
+
+  $global:ProberState.Findings = @(
+    $global:ProberState.Findings |
+      Where-Object { $_ -and $_.Id -ne $Id }
+  )
+
+  $testMeta = $null
+
+  try {
+    if (-not [string]::IsNullOrWhiteSpace($TestId) -and
+        $global:ProberState -and
+        $global:ProberState.Tests) {
+
+      $testMeta = @(
+        $global:ProberState.Tests |
+          Where-Object { $_ -and $_.Id -eq $TestId } |
+          Select-Object -First 1
+      )[0]
+    }
+  }
+  catch {
+    fncLogException $_.Exception "fncAddFinding metadata lookup"
+  }
+
+  $mitre = @()
+  $cwe   = @()
+  $nist  = @()
+  $refs  = @()
+
+  $primaryCategory = $null
+  $subCategories   = @()
+
+  $scopes         = @()
+  $requiresAdmin  = $false
+  $enabled        = $true
+  $schemaVersion  = $null
+  $testName       = $null
+  $testFunction   = $null
+  $testDesc       = $null
+
+  if ($null -ne $testMeta) {
+
+    try {
+
+      if ($testMeta.PSObject.Properties.Name -contains "SchemaVersion") {
+        $schemaVersion = $testMeta.SchemaVersion
+      }
+
+      $testName     = $testMeta.Name
+      $testFunction = $testMeta.Function
+      $testDesc     = $testMeta.Description
+
+      if ($testMeta.Category -and
+          $testMeta.Category.PSObject.Properties.Name -contains "Primary") {
+
+        $primaryCategory = $testMeta.Category.Primary
+
+        if ($testMeta.Category.PSObject.Properties.Name -contains "Subcategories") {
+          $subCategories = @($testMeta.Category.Subcategories)
+        }
+      }
+
+      if ($testMeta.Scopes) {
+        $scopes = @($testMeta.Scopes)
+      }
+
+      if ($null -ne $testMeta.RequiresAdmin) {
+        $requiresAdmin = [bool]$testMeta.RequiresAdmin
+      }
+
+      if ($null -ne $testMeta.Enabled) {
+        $enabled = [bool]$testMeta.Enabled
+      }
+
+      if ($testMeta.Mappings) {
+
+        if ($testMeta.Mappings.MitreAttack) {
+
+            $seenMitre = @{}
+
+            foreach ($m in @($testMeta.Mappings.MitreAttack)) {
+
+                if (-not $m) { continue }
+
+                $techId   = ""
+                $techName = ""
+                $tactic   = ""
+                $url      = ""
+
+                if ($schemaVersion -ge 5 -and
+                    $m.PSObject.Properties.Name -contains "Technique") {
+
+                    $techObj = $m.Technique
+                    $tacObj  = $m.Tactic
+
+                    if ($techObj -and $techObj.Id) {
+
+                        $techId = $techObj.Id
+
+                        if ($techObj.SubTechnique -and
+                            -not [string]::IsNullOrWhiteSpace($techObj.SubTechnique)) {
+
+                            $techId = "$($techObj.Id).$($techObj.SubTechnique)"
+                        }
+
+                        $techName = $techObj.Name
+                        $url      = $techObj.Url
+                    }
+
+                    if ($tacObj -and $tacObj.Name) {
+                        $tactic = $tacObj.Name
+                    }
+                }
+
+                elseif ($m.Technique) {
+
+                    $techId = $m.Technique
+
+                    if ($m.SubTechnique -and
+                        -not [string]::IsNullOrWhiteSpace($m.SubTechnique)) {
+
+                        $techId = "$($m.Technique).$($m.SubTechnique)"
+                    }
+
+                    $techName = $m.Name
+                    $tactic   = $m.Tactic
+                    $url      = $m.Url
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($techId) -and
+                    -not $seenMitre.ContainsKey($techId)) {
+
+                    $mitre += [pscustomobject]@{
+                        Id     = $techId
+                        Name   = $techName
+                        Tactic = $tactic
+                        Url    = $url
+                    }
+
+                    $seenMitre[$techId] = $true
+                }
+            }
+        }
+
+        if ($testMeta.Mappings.CWE) {
+
+            foreach ($c in @($testMeta.Mappings.CWE)) {
+
+                if (-not $c) { continue }
+
+                $id   = ""
+                $name = ""
+                $url  = ""
+
+                if ($schemaVersion -ge 5 -and
+                    $c.PSObject.Properties.Name -contains "Weakness") {
+
+                    $w = $c.Weakness
+
+                    if ($w -and $w.Id) {
+                        $id   = $w.Id
+                        $name = $w.Name
+                        $url  = $w.Url
+                    }
+                }
+
+                elseif ($c.Id) {
+
+                    $id   = $c.Id
+                    $name = $c.Name
+                    $url  = $c.Url
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($id)) {
+
+                    $cwe += [pscustomobject]@{
+                        Id   = $id
+                        Name = $name
+                        Url  = $url
+                    }
+                }
+            }
+        }
+
+        if ($testMeta.Mappings.Nist) {
+
+            foreach ($n in @($testMeta.Mappings.Nist)) {
+
+                if (-not $n) { continue }
+
+                $id   = ""
+                $name = ""
+                $url  = ""
+
+                if ($schemaVersion -ge 5 -and
+                    $n.PSObject.Properties.Name -contains "Control") {
+
+                    $ctrl = $n.Control
+
+                    if ($ctrl -and $ctrl.Id) {
+                        $id   = $ctrl.Id
+                        $name = $ctrl.Name
+                        $url  = $ctrl.Url
+                    }
+                }
+
+                elseif ($n.Control) {
+
+                    $id   = $n.Control
+                    $name = $n.Name
+                    $url  = $n.Url
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($id)) {
+
+                    $nist += [pscustomobject]@{
+                        Id   = $id
+                        Name = $name
+                        Url  = $url
+                    }
+                }
+            }
+        }
+      }
+
+      if ($testMeta.References) {
+        $refs = @($testMeta.References)
+      }
+
+    }
+    catch {
+      fncLogException $_.Exception "fncAddFinding metadata extraction"
+    }
+  }
+
+  $global:ProberState.Findings += [pscustomobject]@{
+    Id           = $Id
+    Category     = $Category
+    Title        = $Title
+    Severity     = $Severity
+    Status       = $Status
+    Message      = $Message
+
+    Recommendation = $Recommendation
+    Exploitation   = $Exploitation
+    Remediation    = $Remediation
+
+    TestMeta = [pscustomobject]@{
+      SchemaVersion = $schemaVersion
+      Name          = $testName
+      Function      = $testFunction
+      Description   = $testDesc
+      Enabled       = $enabled
+      RequiresAdmin = $requiresAdmin
+      Scopes        = $scopes
+
+      Category = [pscustomobject]@{
+        Primary       = $primaryCategory
+        Subcategories = $subCategories
+      }
+
+      References = $refs
+    }
+
+    Mitre     = $mitre
+    CWE       = $cwe
+    NIST      = $nist
+
+    Timestamp = Get-Date
+  }
+}
+
+function fncRegisterConsoleBreakHandler {
+
+    param([scriptblock]$OnBreak = {})
+
+    fncLog "DEBUG" "Registering console break handler"
+
+    try {
+        Unregister-Event ConsoleBreak -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+
+    try {
+        Register-EngineEvent ConsoleBreak -SupportEvent -Action {
+            try { & $using:OnBreak } catch {}
+            try { $event.Sender.Cancel = $true } catch {}
+        } | Out-Null
+    } catch {
+        fncLogException $_.Exception "fncRegisterConsoleBreakHandler"
+    }
+}
+
+function fncSafeArray {
+    param($Value)
+
+    if ($null -eq $Value) { return @() }
+
+    return @($Value)
+}
+
+function fncSafeCount {
+
+    param($Value)
+
+    if ($null -eq $Value) { return 0 }
+
+    try {
+        return @($Value | Where-Object { $_ -ne $null }).Count
+    }
+    catch {
+        return 0
+    }
+}
+
+function fncSafeString { 
+    param($Value) 
+    if ($null -eq $Value) { 
+        return "" 
+    } return [string]$Value 
+}
+
+function fncCommandExists {
+    param([Parameter(Mandatory=$true)][string]$Name)
+    return [bool](Get-Command -Name $Name -ErrorAction SilentlyContinue)
+}
+
+function fncSafePrintMessage {
+    param([string]$Msg,[string]$Level="info")
+
+    if (fncCommandExists "fncPrintMessage") {
+        fncPrintMessage $Msg $Level
+        return
+    }
+    Write-Host $Msg
+}
+
+function fncSafePause {
+    if (fncCommandExists "fncRenderPause") { fncRenderPause; return }
+    Write-Host ""
+    Read-Host "Press Enter to continue" | Out-Null
+}
+
+function fncSafeRenderHeader {
+    if (fncCommandExists "fncRenderHeader") { fncRenderHeader; return }
+    Clear-Host
+    Write-Host ""
+}
+
+function fncSafeSectionHeader {
+    param([string]$Title)
+
+    if (fncCommandExists "fncRenderSectionHeader") {
+        fncRenderSectionHeader -Title $Title
+        return
+    }
+
+    Write-Host ("==== {0} ====" -f $Title)
+}
+
+function fncSafeDivider {
+    if (fncCommandExists "fncRenderDivider") { fncRenderDivider; return }
+    Write-Host "==========================================="
+}
+
+function fncSafeMenuOption {
+    param([string]$Key,[string]$Label)
+
+    if (fncCommandExists "fncRenderMenuOption") {
+        fncRenderMenuOption -Key $Key -Label $Label
+        return
+    }
+
+    Write-Host ("[{0}] {1}" -f $Key,$Label)
+}
+
+function fncSafeBackQuit {
+    if (fncCommandExists "fncRenderBackQuit") {
+        fncRenderBackQuit
+        return
+    }
+
+    Write-Host "[B] Back"
+    Write-Host "[Q] Quit"
+}
+
+function fncReadJsonFileSafe {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        $Default = $null
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { return $Default }
+
+        $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) { return $Default }
+
+        return ($raw | ConvertFrom-Json -ErrorAction Stop)
+    }
+    catch {
+        return $Default
+    }
+}
+
+function fncWriteJsonFileSafe {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)]$Object,
+        [int]$Depth = 15
+    )
+
+    try {
+        $json = $Object | ConvertTo-Json -Depth $Depth
+        Set-Content -LiteralPath $Path -Value $json -Encoding UTF8 -Force
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function fncSafeHasProp {
+    param(
+        [Parameter(Mandatory=$true)]$Obj,
+        [Parameter(Mandatory=$true)][string]$Name
+    )
+    if ($null -eq $Obj) { return $false }
+    try { return ($Obj.PSObject.Properties.Name -contains $Name) } catch { return $false }
+}
+
+function fncSafeGetProp {
+    param(
+        [Parameter(Mandatory=$true)]$Obj,
+        [Parameter(Mandatory=$true)][string]$Name,
+        $Default = $null
+    )
+    if (-not (fncSafeHasProp $Obj $Name)) { return $Default }
+    try { return $Obj.$Name } catch { return $Default }
+}
+
+function fncToSafeString {
+    param($Value)
+
+    if ($null -eq $Value) { return "" }
+
+    try { return [string]$Value }
+    catch { return "" }
+}
+
+function fncGetUtcNowIso {
+    return (Get-Date).ToUniversalTime().ToString("o")
+}
+
+function fncToSafeString {
+    param($Value)
+    if ($null -eq $Value) { return "" }
+    return [string]$Value
+}
+
+function fncFormatColumn {
+    param(
+        [string]$Text,
+        [int]$Width
+    )
+
+    if ($null -eq $Text) { $Text = "" }
+
+    $t = [string]$Text
+
+    if ($t.Length -gt $Width) {
+        return $t.Substring(0, $Width - 3) + "..."
+    }
+
+    return $t.PadRight($Width)
+}
+
+function fncIsCacheFresh {
+    param(
+        [string]$Path,
+        [int]$MaxAgeHours = 24
+    )
+
+    if (-not (Test-Path $Path)) { return $false }
+
+    $age = (Get-Date) - (Get-Item $Path).LastWriteTime
+    return ($age.TotalHours -lt $MaxAgeHours)
+}
+
+Export-ModuleMember -Function @(
+    "fncGetScriptDirectory",
+    "fncInitProberState",
+    "fncIsAdmin",
+    "fncCreateTempDir",
+    "fncCleanupTempDir",
+    "fncGetEnvProfile",
+    "fncAskYesNo",
+    "fncPause",
+    "fncTryGetRegistryValue",
+    "fncInitFindings",
+    "fncAddFinding",
+    "fncRegisterConsoleBreakHandler",
+    "fncSafeCount",
+    "fncSafeArray",
+    "fncSafeString",
+    "fncCommandExists",
+    "fncSafePrintMessage",
+    "fncSafePause",
+    "fncSafeRenderHeader",
+    "fncSafeSectionHeader",
+    "fncSafeDivider",
+    "fncSafeMenuOption",
+    "fncSafeBackQuit",
+    "fncSafeHasProp",
+    "fncSafeGetProp",
+    "fncToSafeString",
+    "fncGetUtcNowIso",
+    "fncReadJsonFileSafe",
+    "fncWriteJsonFileSafe",
+    "fncFormatColumn",
+    "fncIsCacheFresh"
+)
