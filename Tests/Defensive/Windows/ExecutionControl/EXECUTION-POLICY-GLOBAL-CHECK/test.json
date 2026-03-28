@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "EXECUTION-POLICY-GLOBAL-CHECK",
+    "Name": "PowerShell Execution Policy Global Check",
+    "Function": "fncCheckExecutionPolicyGlobal",
+    "Category": {
+        "Primary": "Execution Control",
+        "Subcategories": [
+            "PowerShell Execution Policy",
+            "Script Governance",
+            "Bypass Risk",
+            "Defence in Depth"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Enumerates PowerShell execution policy across all scopes and evaluates effective script execution posture.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

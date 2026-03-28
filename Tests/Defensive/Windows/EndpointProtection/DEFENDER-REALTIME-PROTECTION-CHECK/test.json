@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "DEFENDER-RTP-CHECK",
+    "Name": "Defender Real-Time Protection Validation",
+    "Function": "fncCheckDefenderRealtimeProtection",
+    "Category": {
+        "Primary": "Endpoint Protection",
+        "Subcategories": [
+            "Real-Time Protection State",
+            "Malware Scanning Integrity",
+            "Defender Health",
+            "Security Control Coverage"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Checks whether Microsoft Defender Real-Time Protection is enabled. Disabling Real-Time Protection allows malware to execute without being scanned.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "WDIGEST-ENABLED-CHECK",
+    "Name": "WDigest Credential Exposure Validation",
+    "Function": "fncCheckWDigestExposure",
+    "Category": {
+        "Primary": "Credential Protection",
+        "Subcategories": [
+            "WDigest Cleartext Risk",
+            "Plaintext Password in Memory",
+            "LSASS Exposure",
+            "Credential Dumping Surface"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Detects whether WDigest credential caching is enabled, which may expose plaintext credentials in LSASS memory and increase the impact of credential dumping attacks.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

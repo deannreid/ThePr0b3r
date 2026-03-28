@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "APPLOCKER-ENFORCEMENT-MODE",
+    "Name": "AppLocker Enforcement Mode Validation",
+    "Function": "fncCheckAppLockerEnforcementMode",
+    "Category": {
+        "Primary": "Application Control",
+        "Subcategories": [
+            "AppLocker Allow-Listing",
+            "Enforcement vs Audit Mode",
+            "Execution Control",
+            "Bypass Risk"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Determines whether AppLocker is configured and whether each rule collection is Enforced, Audit Only, or Not Configured. Also validates Application Identity (AppIDSvc) service state which is required for enforcement.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

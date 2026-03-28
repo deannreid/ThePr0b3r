@@ -1,0 +1,27 @@
+{
+    "SchemaVersion": 6,
+    "Id": "LINUX-CAPABILITIES-AUDIT",
+    "Name": "Linux File Capabilities Security Audit",
+    "Function": "fncCheckLinuxCapabilitiesAudit",
+    "Category": {
+        "Primary": "Privilege Escalation",
+        "Subcategories": [
+            "File Capabilities",
+            "Least Privilege",
+            "Attack Surface Reduction",
+            "Capability Hardening"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Enumerates all files on the filesystem with Linux capabilities set via getcap. Categorises discovered capabilities by severity (Critical: cap_setuid/cap_sys_admin/cap_sys_module; High: cap_dac_override/cap_sys_ptrace/cap_chown; Medium: cap_net_admin/cap_net_raw). Read-only enumeration - no capabilities are modified.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

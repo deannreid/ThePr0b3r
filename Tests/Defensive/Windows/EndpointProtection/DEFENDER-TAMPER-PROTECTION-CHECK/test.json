@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "DEFENDER-TAMPER-PROTECTION",
+    "Name": "Defender Tamper Protection Validation",
+    "Function": "fncCheckDefenderTamperProtection",
+    "Category": {
+        "Primary": "Endpoint Protection",
+        "Subcategories": [
+            "Tamper Protection State",
+            "Defender Configuration Lock",
+            "RTP Integrity",
+            "Security Control Persistence"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Determines whether Microsoft Defender Tamper Protection is enabled to prevent unauthorized modification of Defender security settings.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

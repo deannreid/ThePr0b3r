@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CIS-NETBIOS-CONFIG",
+    "Name": "NetBIOS over TCP/IP Configuration Validation",
+    "Function": "fncCheckNetBIOSConfiguration",
+    "Category": {
+        "Primary": "Network Security",
+        "Subcategories": [
+            "NetBIOS Poisoning Surface",
+            "Name Resolution Attack Risk",
+            "Credential Interception Prevention",
+            "Network Hardening"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Evaluates whether NetBIOS over TCP/IP is enabled on network adapters which can expose systems to name resolution poisoning and credential interception attacks.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

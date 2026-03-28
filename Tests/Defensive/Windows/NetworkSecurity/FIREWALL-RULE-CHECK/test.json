@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "FIREWALL-RULE-CHECK",
+    "Name": "Windows Firewall Configuration Validation",
+    "Function": "fncCheckWindowsFirewallConfiguration",
+    "Category": {
+        "Primary": "Network Security",
+        "Subcategories": [
+            "Host Firewall Configuration",
+            "Inbound Attack Surface",
+            "Network Exposure",
+            "Lateral Movement Prevention"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Checks Windows Firewall configuration across Domain, Private, and Public profiles and identifies unnecessary inbound firewall rules exposing network services.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

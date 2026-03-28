@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LINUX-SUID-SGID-AUDIT",
+    "Name": "SUID/SGID Binary Audit",
+    "Function": "fncCheckLinuxSuidSgid",
+    "Category": {
+        "Primary": "Privilege Escalation",
+        "Subcategories": [
+            "SUID/SGID Abuse",
+            "GTFOBins",
+            "Binary Hardening",
+            "Local Root Path"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Enumerates all SUID and SGID binaries on the filesystem, compares against a known-safe baseline, and flags non-standard entries. Cross-references findings against known GTFOBins escalation patterns. No privilege operations performed.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

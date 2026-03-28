@@ -1,0 +1,27 @@
+{
+    "SchemaVersion": 6,
+    "Id": "LINUX-AUDITD-CONFIG",
+    "Name": "Audit Daemon Configuration Assessment",
+    "Function": "fncCheckLinuxAuditd",
+    "Category": {
+        "Primary": "Defense Evasion",
+        "Subcategories": [
+            "Detection Capability",
+            "Audit Logging",
+            "Log Integrity",
+            "Security Monitoring"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Checks whether auditd is installed and running, evaluates key audit rules (privilege escalation events, credential file access, kernel module loading, sudoers changes), and reviews log retention and disk-full action settings. Read-only - no changes to audit configuration.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CIS-IPV6-CONFIG",
+    "Name": "IPv6 Configuration Validation",
+    "Function": "fncCheckIPv6Configuration",
+    "Category": {
+        "Primary": "Network Security",
+        "Subcategories": [
+            "IPv6 Attack Surface",
+            "Rogue Routing Prevention",
+            "Network Hardening",
+            "CIS Benchmark"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Checks whether IPv6 is enabled on network adapters when the environment does not use IPv6. If unused, IPv6 should be disabled to reduce the attack surface and prevent rogue IPv6 routing or tunnelling attacks.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

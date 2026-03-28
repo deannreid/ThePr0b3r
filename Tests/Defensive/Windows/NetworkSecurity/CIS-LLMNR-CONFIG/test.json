@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CIS-LLMNR-CONFIG",
+    "Name": "LLMNR Configuration Validation",
+    "Function": "fncCheckLLMNRConfiguration",
+    "Category": {
+        "Primary": "Network Security",
+        "Subcategories": [
+            "LLMNR Poisoning Surface",
+            "Responder Attack Risk",
+            "Credential Interception Prevention",
+            "Name Resolution Security"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Evaluates whether LLMNR (Link-Local Multicast Name Resolution) is enabled which may expose systems to credential interception attacks such as Responder poisoning.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

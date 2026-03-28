@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "COMMANDLINE-LOGGING-CHECK",
+    "Name": "Command Line and PowerShell Logging Validation",
+    "Function": "fncCheckCommandlineLogging",
+    "Category": {
+        "Primary": "Logging \u0026 Monitoring",
+        "Subcategories": [
+            "Command-Line Logging",
+            "PowerShell Script Block Logging",
+            "Process Creation Telemetry",
+            "Investigation Capability"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Validates whether command execution telemetry is captured through Process Creation logging, command line argument capture, and PowerShell logging features.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CREDENTIAL-GUARD-STATUS",
+    "Name": "Credential Guard Validation",
+    "Function": "fncCheckCredentialGuardStatus",
+    "Category": {
+        "Primary": "Credential Protection",
+        "Subcategories": [
+            "Credential Guard",
+            "LSASS Memory Isolation",
+            "Pass-the-Hash Prevention",
+            "Virtualization-Based Security"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Determines whether Windows Credential Guard is enabled to protect credential material from LSASS memory extraction attacks.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

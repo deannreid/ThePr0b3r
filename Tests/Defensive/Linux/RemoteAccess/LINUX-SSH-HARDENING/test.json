@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LINUX-SSH-HARDENING",
+    "Name": "SSH Daemon Hardening Assessment",
+    "Function": "fncCheckLinuxSshHardening",
+    "Category": {
+        "Primary": "Remote Access",
+        "Subcategories": [
+            "SSH Hardening",
+            "Authentication Controls",
+            "Initial Access Reduction",
+            "Attack Surface Reduction"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Reads /etc/ssh/sshd_config and evaluates SSH daemon security posture including root login, password authentication, forwarding, grace time, host key permissions and session limits. No connections are made.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

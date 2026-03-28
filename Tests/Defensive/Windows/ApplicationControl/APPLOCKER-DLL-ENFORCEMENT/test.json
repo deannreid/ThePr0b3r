@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "APPLOCKER-DLL-ENFORCEMENT",
+    "Name": "AppLocker DLL Enforcement Validation",
+    "Function": "fncCheckAppLockerDllEnforcement",
+    "Category": {
+        "Primary": "Application Control",
+        "Subcategories": [
+            "AppLocker DLL Rules",
+            "Search-Order Hijacking Prevention",
+            "Execution Hardening",
+            "Bypass Risk"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Validates whether AppLocker DLL rule collection exists, contains rules, and is enforced. DLL enforcement significantly reduces search-order hijacking and proxy execution abuse.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

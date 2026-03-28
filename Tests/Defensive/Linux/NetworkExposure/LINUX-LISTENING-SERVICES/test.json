@@ -1,0 +1,27 @@
+{
+    "SchemaVersion": 6,
+    "Id": "LINUX-LISTENING-SERVICES",
+    "Name": "Listening Network Services Audit",
+    "Function": "fncCheckLinuxListeningServices",
+    "Category": {
+        "Primary": "Network Exposure",
+        "Subcategories": [
+            "Attack Surface Reduction",
+            "Dangerous Protocols",
+            "Externally Exposed Services",
+            "Initial Access Reduction"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Enumerates all TCP and UDP listening services using ss or netstat. Flags services bound to all interfaces (0.0.0.0 / ::), identifies inherently dangerous legacy protocols (Telnet, FTP, rsh, rlogin, TFTP), and highlights processes with no associated service name. Read-only - no connections made.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

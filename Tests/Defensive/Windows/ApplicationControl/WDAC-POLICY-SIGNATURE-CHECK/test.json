@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "WDAC-POLICY-SIGNATURE-CHECK",
+    "Name": "WDAC Policy Signature \u0026 Enforcement Validation",
+    "Function": "fncCheckWDACPolicy",
+    "Category": {
+        "Primary": "Application Control",
+        "Subcategories": [
+            "WDAC Policy",
+            "Kernel-Mode Code Integrity",
+            "Signed Binary Requirement",
+            "Application Allow-Listing"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Evaluates Windows Defender Application Control (WDAC) policy presence, enforcement mode, UMCI status, and policy signing integrity.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

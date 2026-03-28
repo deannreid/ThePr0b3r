@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LINUX-SUDO-CONFIG",
+    "Name": "Sudo Configuration Security Assessment",
+    "Function": "fncCheckLinuxSudoConfig",
+    "Category": {
+        "Primary": "Privilege Escalation",
+        "Subcategories": [
+            "Sudo Hardening",
+            "NOPASSWD Abuse Risk",
+            "Least Privilege Enforcement",
+            "Local Escalation Path"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Reads /etc/sudoers and /etc/sudoers.d to identify NOPASSWD entries, unrestricted ALL privileges, insecure file permissions, world-writable drop-in files and known vulnerable sudo versions. No privilege operations are performed.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

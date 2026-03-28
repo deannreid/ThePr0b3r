@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "DEFENDER-EXCLUSION-CHECK",
+    "Name": "Microsoft Defender Exclusion Validation",
+    "Function": "fncCheckDefenderExclusions",
+    "Category": {
+        "Primary": "Endpoint Protection",
+        "Subcategories": [
+            "Defender Exclusion Abuse",
+            "AV Bypass Surface",
+            "Malware Execution Risk",
+            "Security Control Weakening"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Enumerates Microsoft Defender exclusion configuration including path, process, and extension exclusions which may allow malware to bypass antivirus scanning.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

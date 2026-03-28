@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LSASS-PPL-STATUS",
+    "Name": "LSASS Protected Process Validation",
+    "Function": "fncCheckLSASSProtectedProcess",
+    "Category": {
+        "Primary": "Credential Protection",
+        "Subcategories": [
+            "LSASS PPL",
+            "Credential Dumping Prevention",
+            "Mimikatz Resistance",
+            "Memory Protection"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "High",
+    "Description": "Determines whether LSASS is running as a Protected Process (RunAsPPL) to prevent credential dumping attacks from accessing LSASS memory.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

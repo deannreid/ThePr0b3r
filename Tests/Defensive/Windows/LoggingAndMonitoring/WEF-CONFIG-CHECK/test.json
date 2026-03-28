@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "WEF-CONFIG-CHECK",
+    "Name": "Windows Event Forwarding Validation",
+    "Function": "fncCheckWEFConfiguration",
+    "Category": {
+        "Primary": "Logging \u0026 Monitoring",
+        "Subcategories": [
+            "Windows Event Forwarding",
+            "Off-Host Log Collection",
+            "Log Tamper Prevention",
+            "SIEM Feed Integrity"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Validates whether Windows Event Forwarding is configured strongly enough to move telemetry off-host before an operator can tamper with local logs or suppress visibility.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

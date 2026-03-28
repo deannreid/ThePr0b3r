@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "SECURITYCENTER-SERVICE-CHECK",
+    "Name": "Windows Security Center Service Validation",
+    "Function": "fncCheckSecurityCenterServiceState",
+    "Category": {
+        "Primary": "Endpoint Protection",
+        "Subcategories": [
+            "Security Center Service",
+            "AV/Firewall Status Monitoring",
+            "Security Health Visibility",
+            "Service Integrity"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Validates that the Windows Security Center service (wscsvc) is running and correctly configured. This service monitors system security status including antivirus, firewall, and security updates. Disabling it may reduce visibility into endpoint protection health.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

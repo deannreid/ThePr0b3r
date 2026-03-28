@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LINUX-CRON-AUDIT",
+    "Name": "Cron Job Security Assessment",
+    "Function": "fncCheckLinuxCronSecurity",
+    "Category": {
+        "Primary": "Persistence",
+        "Subcategories": [
+            "Cron Abuse",
+            "Scheduled Task Hijacking",
+            "Writable Script Detection",
+            "Privilege Escalation Path"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Audits cron configuration across /etc/crontab, /etc/cron.d, cron directories, and user crontabs. Checks file permissions and ownership, identifies root cron jobs calling writable scripts, and flags wildcard injection patterns in cron commands.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

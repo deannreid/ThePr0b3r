@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "LINUX-KERNEL-HARDENING",
+    "Name": "Kernel Security Parameter Audit",
+    "Function": "fncCheckLinuxKernelHardening",
+    "Category": {
+        "Primary": "Kernel Security",
+        "Subcategories": [
+            "ASLR",
+            "sysctl Hardening",
+            "Memory Protection",
+            "Kernel Attack Surface"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Evaluates sysctl kernel security parameters including ASLR, dmesg_restrict, kptr_restrict, ptrace_scope, BPF restrictions, filesystem hardening flags, and network protection settings. Read-only sysctl enumeration - no parameters modified.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

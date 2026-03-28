@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CIS-SMB-CONFIG",
+    "Name": "SMB Security Configuration Validation",
+    "Function": "fncCheckSMBConfiguration",
+    "Category": {
+        "Primary": "Network Security",
+        "Subcategories": [
+            "SMBv1 Exposure",
+            "SMB Signing Enforcement",
+            "NTLM Relay Prevention",
+            "Lateral Movement Surface"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Evaluates SMB security posture including SMBv1 usage and SMB signing enforcement which are commonly abused for lateral movement and NTLM relay attacks.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

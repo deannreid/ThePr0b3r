@@ -1,0 +1,27 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "MSI-INSTALLER-RESTRICTION",
+    "Name": "MSI Installer Restriction Check",
+    "Function": "fncCheckMSIInstallerRestriction",
+    "Category": {
+        "Primary": "Execution Control",
+        "Subcategories": [
+            "Windows Installer Controls",
+            "AlwaysInstallElevated Risk",
+            "Software Installation Governance",
+            "Privilege Escalation Prevention"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server",
+        "DMZ"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Evaluates Windows Installer (MSI) restriction posture using policy and registry signals (AlwaysInstallElevated, DisableMSI, GPO enforcement) and highlights potential privilege escalation / execution abuse paths.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

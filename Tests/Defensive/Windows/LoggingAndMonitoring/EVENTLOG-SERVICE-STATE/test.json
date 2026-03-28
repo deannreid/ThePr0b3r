@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "EVENTLOG-SERVICE-CHECK",
+    "Name": "Windows Event Log Service Validation",
+    "Function": "fncCheckEventLogServiceState",
+    "Category": {
+        "Primary": "Logging \u0026 Monitoring",
+        "Subcategories": [
+            "Event Log Service State",
+            "Log Integrity",
+            "Blind Spot Detection",
+            "Tamper Resistance"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Validates that the Windows Event Log service is running and configured correctly. Disabling or stopping this service prevents security events from being recorded, significantly reducing visibility into attacker activity.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

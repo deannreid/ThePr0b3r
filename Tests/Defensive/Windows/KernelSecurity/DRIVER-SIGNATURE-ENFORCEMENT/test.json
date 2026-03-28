@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "DRIVER-SIGNATURE-ENFORCEMENT",
+    "Name": "Kernel Driver Signature Enforcement Check",
+    "Function": "fncCheckDriverSignatureEnforcement",
+    "Category": {
+        "Primary": "Kernel Security",
+        "Subcategories": [
+            "Driver Signing Enforcement",
+            "Code Integrity",
+            "BYOVD Prevention",
+            "Kernel Protection"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Medium",
+    "Description": "Evaluates whether Windows enforces kernel-mode driver signature validation and whether test-signing or integrity bypass modes are enabled.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

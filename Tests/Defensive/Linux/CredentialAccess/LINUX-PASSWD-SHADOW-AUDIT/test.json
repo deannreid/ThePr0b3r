@@ -1,0 +1,27 @@
+{
+    "SchemaVersion": 6,
+    "Id": "LINUX-PASSWD-SHADOW-AUDIT",
+    "Name": "Password and Shadow File Security Audit",
+    "Function": "fncCheckLinuxPasswdShadow",
+    "Category": {
+        "Primary": "Credential Access",
+        "Subcategories": [
+            "Account Security",
+            "Password Policy",
+            "UID 0 Enumeration",
+            "Hash Algorithm Audit"
+        ]
+    },
+    "Scopes": [
+        "Server",
+        "DMZ",
+        "Workstation"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Audits /etc/passwd and /etc/shadow for insecure configurations including duplicate UID 0 accounts, weak password hash algorithms, empty passwords, excessive shadow file permissions, and accounts with no login shell restrictions. Read-only - no modifications made.",
+    "OS": "Linux",
+    "Strategy": "Defensive"
+}

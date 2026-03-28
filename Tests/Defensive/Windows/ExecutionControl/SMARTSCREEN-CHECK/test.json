@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "SMARTSCREEN-CHECK",
+    "Name": "Microsoft Defender SmartScreen Enforcement Check",
+    "Function": "fncCheckSmartScreen",
+    "Category": {
+        "Primary": "Execution Control",
+        "Subcategories": [
+            "SmartScreen Enforcement",
+            "Reputation-Based Blocking",
+            "Malware Execution Prevention",
+            "Initial Access Defence"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Beta",
+    "Risk": "Safe",
+    "Description": "Evaluates Microsoft Defender SmartScreen enforcement state for executable reputation-based blocking.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

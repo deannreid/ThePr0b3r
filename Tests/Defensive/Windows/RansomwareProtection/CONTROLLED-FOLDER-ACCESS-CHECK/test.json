@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "CONTROLLED-FOLDER-ACCESS-CHECK",
+    "Name": "Controlled Folder Access (CFA) Validation",
+    "Function": "fncCheckControlledFolderAccess",
+    "Category": {
+        "Primary": "Ransomware Protection",
+        "Subcategories": [
+            "Controlled Folder Access",
+            "Ransomware Mitigation",
+            "File System Protection",
+            "Tamper Resistance"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Low",
+    "Description": "Evaluates Microsoft Defender Controlled Folder Access (CFA) configuration, enforcement mode, exclusions, and Defender dependency state.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

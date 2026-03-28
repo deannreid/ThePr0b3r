@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "WMI-LOGGING-CHECK",
+    "Name": "WMI Activity Logging Validation",
+    "Function": "fncCheckWMILogging",
+    "Category": {
+        "Primary": "Logging \u0026 Monitoring",
+        "Subcategories": [
+            "WMI Activity Logging",
+            "Lateral Movement Detection",
+            "Persistence Telemetry",
+            "Attacker Technique Visibility"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": false,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "Safe",
+    "Description": "Validates that the Microsoft-Windows-WMI-Activity Operational event log is enabled. This log records Windows Management Instrumentation (WMI) activity which is frequently abused by attackers for execution, persistence, and lateral movement.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}

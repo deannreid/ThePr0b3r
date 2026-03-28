@@ -1,0 +1,26 @@
+﻿{
+    "SchemaVersion": 6,
+    "Id": "OBJECT-ACCESS-AUDIT-CHECK",
+    "Name": "Object Access Audit Validation",
+    "Function": "fncCheckObjectAccessAudit",
+    "Category": {
+        "Primary": "Logging \u0026 Monitoring",
+        "Subcategories": [
+            "Object Access Auditing",
+            "Credential File Access Detection",
+            "Registry Access Visibility",
+            "Forensic Coverage"
+        ]
+    },
+    "Scopes": [
+        "Workstation",
+        "Server"
+    ],
+    "RequiresAdmin": true,
+    "Enabled": true,
+    "Maturity": "Stable",
+    "Risk": "High",
+    "Description": "Validates whether object access auditing is configured strongly enough to surface attacker interaction with sensitive files, folders, and registry-backed credential material.",
+    "OS": "Windows",
+    "Strategy": "Defensive"
+}
