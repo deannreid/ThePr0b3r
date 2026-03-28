@@ -1,137 +1,146 @@
 # ================================================================
-# Module  : Logging.psm1
+# Module: Logging.psm1
 # ================================================================
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
-if (-not (Get-Variable LogFile -Scope Global -ErrorAction SilentlyContinue)) {
-    # Caller should set this; we fall back to a temp location.
-    $global:LogFile = Join-Path $env:TEMP "thePr0b3r.log"
+$script:LogLevels = @{
+    NONE  = 0
+    ERROR = 1
+    WARN  = 2
+    INFO  = 3
+    DEBUG = 4
 }
 
-if (-not (Get-Variable OutputDebug -Scope Global -ErrorAction SilentlyContinue)) {
-    $global:OutputDebug = $false
-}
-
-function fncInitLogging {
-    param(
-        [string]$Path = $global:LogFile
-    )
-
-    if ([string]::IsNullOrWhiteSpace($Path)) {
-        $Path = Join-Path $env:TEMP "thePr0b3r.log"
-        $global:LogFile = $Path
-    }
-
-    try {
-        $dir = Split-Path -Parent $Path
-        if (-not (Test-Path -LiteralPath $dir)) {
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        }
-
-        if (-not (Test-Path -LiteralPath $Path)) {
-            New-Item -ItemType File -Path $Path -Force | Out-Null
-        }
-    } catch {
-        $fallback = Join-Path $env:TEMP "thePr0b3r.log"
-        $global:LogFile = $fallback
-        try {
-            if (-not (Test-Path -LiteralPath $fallback)) {
-                New-Item -ItemType File -Path $fallback -Force | Out-Null
-            }
-        } catch { }
-    }
-}
-
-function fncLog {
-    param(
-        [Parameter(Mandatory=$true)][ValidateSet("INFO","WARN","ERROR","DEBUG")]
-        [string]$Level,
-
-        [Parameter(Mandatory=$true)][AllowEmptyString()][string]$Message
-    )
-
-    # Honour DEBUG toggles
-    if ($Level -eq "DEBUG") {
-        $debugOn = $false
-        try {
-            if ($global:OutputDebug -eq $true) { $debugOn = $true }
-            elseif ($null -ne $global:config -and $null -ne $global:config.DEBUG -and $global:config.DEBUG -eq $true) { $debugOn = $true }
-        } catch { $debugOn = $false }
-
-        if (-not $debugOn) { return }
-    }
-
-    try { fncInitLogging | Out-Null } catch { }
-
-    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
-    $line = "{0} [{1}] {2}" -f $ts, $Level, $Message
-
-    try {
-        Add-Content -LiteralPath $global:LogFile -Value $line -Encoding UTF8
-    } catch {
-    }
-}
-
-function fncLogException {
-    param(
-        [Parameter(Mandatory=$true)][System.Exception]$Exception,
-        [string]$Context = ""
-    )
-
-    $ctx = ""
-    if (-not [string]::IsNullOrWhiteSpace($Context)) { $ctx = " | Context: $Context" }
-
-    fncLog "ERROR" ("Exception: {0}{1}" -f $Exception.Message, $ctx)
-
-    try {
-        if ($Exception.StackTrace) {
-            fncLog "DEBUG" ("StackTrace: {0}" -f ($Exception.StackTrace -replace "\r?\n"," | "))
-        }
-    } catch { }
-}
-
-function fncLogBanner {
-    param([string]$Title = "Run Start")
-
-    try { fncInitLogging | Out-Null } catch { }
-
-    fncLog "INFO" "============================================================"
-    fncLog "INFO" ("{0} - {1}" -f $Title, (Get-Date).ToString("yyyy-MM-dd HH:mm:ss"))
-    fncLog "INFO" "============================================================"
-}
-
+# ------------------------------------------------------------
+# Determine if console output should occur
+# ------------------------------------------------------------
 function fncShouldConsoleLog {
-    param(
-        [ValidateSet("INFO","WARN","ERROR","DEBUG")]
-        [string]$Level
-    )
 
-    switch ($global:ConsoleLogLevel) {
+    param([string]$Level)
 
-        "NONE"  { return $false }
+    if (-not $global:ProberState) { return $false }
+    if (-not $global:ProberState.Config) { return $false }
 
-        "ERROR" {
-            if ($Level -in @("ERROR","WARN")) { return $true }
-            return $false
-        }
+    $consoleLevel = $global:ProberState.Config.ConsoleLogLevel
 
-        "INFO" {
-            if ($Level -in @("INFO","WARN","ERROR")) { return $true }
-            return $false
-        }
-
-        "DEBUG" { return $true }
+    if ([string]::IsNullOrWhiteSpace($consoleLevel)) {
+        return $false
     }
 
-    return $true
+    $consoleLevel = $consoleLevel.ToUpper()
+    $Level = $Level.ToUpper()
+
+    if ($consoleLevel -eq "NONE") {
+        return $false
+    }
+
+    if (-not $script:LogLevels.ContainsKey($consoleLevel)) {
+        return $false
+    }
+
+    if (-not $script:LogLevels.ContainsKey($Level)) {
+        return $false
+    }
+
+    return ($script:LogLevels[$Level] -le $script:LogLevels[$consoleLevel])
 }
 
-Export-ModuleMember -Function @(
-    "fncInitLogging",
-    "fncLog",
-    "fncLogException",
-    "fncLogBanner",
-    "fncShouldConsoleLog"
-)
+# ------------------------------------------------------------
+# Core Logging Function
+# ------------------------------------------------------------
+function fncLog {
+
+    param(
+        [string]$Level,
+        [string]$Message,
+        [hashtable]$Metadata = $null
+    )
+
+    try {
+
+        $Level = $Level.ToUpper()
+
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+
+        $line = "{0} [{1}] {2}" -f $timestamp, $Level, $Message
+
+        # ---------------------------------
+        # Append structured metadata
+        # ---------------------------------
+        if ($Metadata) {
+
+            $pairs = $Metadata.GetEnumerator() | ForEach-Object {
+                "$($_.Key)=$($_.Value)"
+            }
+
+            $metaString = $pairs -join " "
+
+            $line = "$line | $metaString"
+        }
+
+        $logFile = $global:ProberState.Runtime.LogFile
+
+        if ($logFile) {
+            [System.IO.File]::AppendAllText($logFile, "$line`n")
+        }
+
+        if ((fncShouldConsoleLog $Level) -eq $true) {
+
+            switch ($Level) {
+
+                "ERROR" { Write-Host $line -ForegroundColor Red }
+                "WARN" { Write-Host $line -ForegroundColor Yellow }
+                "DEBUG" { Write-Host $line -ForegroundColor DarkGray }
+
+                default { Write-Host $line }
+            }
+        }
+
+    }
+    catch {
+        Write-Host "Logging failure: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# ------------------------------------------------------------
+# Console Message Helper
+# ------------------------------------------------------------
+function fncPrintMessage {
+
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+
+    $Level = $Level.ToUpper()
+
+    fncLog $Level $Message
+}
+
+# ------------------------------------------------------------
+# Banner Logger
+# ------------------------------------------------------------
+function fncLogBanner {
+
+    param([string]$Title)
+
+    $time = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+    fncLog "INFO" "============================================================"
+    fncLog "INFO" "$Title - $time"
+    fncLog "INFO" "============================================================"
+}
+
+# ------------------------------------------------------------
+# Exception Logger
+# ------------------------------------------------------------
+function fncLogException {
+
+    param(
+        [object]$Exception,
+        [string]$Source = "Unknown"
+    )
+
+    fncLog "ERROR" "Exception in $Source"
+    fncLog "ERROR" $Exception.Message
+    fncLog "DEBUG" $Exception.ToString()
+}

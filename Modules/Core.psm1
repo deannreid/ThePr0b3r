@@ -12,25 +12,28 @@ if (-not (Get-Variable ProberState -Scope Global -ErrorAction SilentlyContinue))
 
     fncLog "DEBUG" "Core bootstrap creating minimal ProberState"
 
+    $_probHost = try { [System.Net.Dns]::GetHostName() } catch { if ($env:COMPUTERNAME) { $env:COMPUTERNAME } elseif ($env:HOSTNAME) { $env:HOSTNAME } else { "unknown" } }
+    $_probUser = try { [Environment]::UserName }         catch { if ($env:USERNAME) { $env:USERNAME }     elseif ($env:USER) { $env:USER }     else { "unknown" } }
+
     $global:ProberState = [pscustomobject]@{
-        Config = [pscustomobject]@{
+        Config            = [pscustomobject]@{
             DEBUG         = $false
             ADVANCED_MODE = $false
         }
 
         Tests             = @()
-        Findings          = @()
+        Findings          = @{}
         TempDir           = $null
         EnvProfile        = "Unknown"
         OperatorTelemetry = $null
-        _LoadedTestIds = @()
+        _LoadedTestIds    = @()
 
 
-        RunContext = [pscustomobject]@{
+        RunContext        = [pscustomobject]@{
             RunId     = [guid]::NewGuid()
             StartTime = Get-Date
-            Host      = $env:COMPUTERNAME
-            User      = $env:USERNAME
+            Host      = $_probHost
+            User      = $_probUser
         }
     }
 
@@ -41,12 +44,12 @@ if (-not (Get-Variable ProberState -Scope Global -ErrorAction SilentlyContinue))
 # Ensure Required Properties Exist
 # ------------------------------------------------------------
 $requiredProps = @(
-    @{ Name="Tests";             Value=@() },
-    @{ Name="Findings";          Value=@() },
-    @{ Name="TempDir";           Value=$null },
-    @{ Name="EnvProfile";        Value="Unknown" },
-    @{ Name="OperatorTelemetry"; Value=$null },
-    @{ Name="_LoadedTestIds"; Value=@() }
+    @{ Name = "Tests"; Value = @() },
+    @{ Name = "Findings"; Value = @{} },
+    @{ Name = "TempDir"; Value = $null },
+    @{ Name = "EnvProfile"; Value = "Unknown" },
+    @{ Name = "OperatorTelemetry"; Value = $null },
+    @{ Name = "_LoadedTestIds"; Value = @() }
 
 )
 
@@ -89,38 +92,29 @@ function fncGetScriptDirectory {
     }
 }
 
-function fncInitProberState {
+function fncGetCurrentOS {
 
-    fncLog "DEBUG" "fncInitProberState invoked"
-
-    if (Get-Variable ProberState -Scope Global -ErrorAction SilentlyContinue) {
-        fncLog "DEBUG" "ProberState already exists - skipping full init"
-        return
-    }
-
-    $global:ProberState = [pscustomobject]@{
-        Config = [pscustomobject]@{
-            DEBUG         = $false
-            ADVANCED_MODE = $false
-        }
-
-        Tests             = @()
-        Findings          = @()
-        TempDir           = $null
-        EnvProfile        = "Unknown"
-        OperatorTelemetry = $null
-        _LoadedTestIds = @()
-
-
-        RunContext = [pscustomobject]@{
-            RunId     = [guid]::NewGuid()
-            StartTime = Get-Date
-            Host      = $env:COMPUTERNAME
-            User      = $env:USERNAME
+    # PS7+ exposes automatic OS variables
+    try {
+        if (Get-Variable IsWindows -ErrorAction SilentlyContinue) {
+            if ($IsWindows) { return "Windows" }
+            if ($IsLinux) { return "Linux" }
+            if ($IsMacOS) { return "macOS" }
         }
     }
+    catch {}
 
-    fncLog "INFO" "ProberState fully initialised via fncInitProberState"
+    # RuntimeInformation available in .NET Core / PS7 even without the automatic vars
+    try {
+        $rid = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+        if ($rid -like "*Windows*") { return "Windows" }
+        if ($rid -like "*Linux*") { return "Linux" }
+        if ($rid -like "*Darwin*" -or $rid -like "*macOS*") { return "macOS" }
+    }
+    catch {}
+
+    # PS5.1 runs exclusively on Windows - safe fallback
+    return "Windows"
 }
 
 function fncIsAdmin {
@@ -128,8 +122,16 @@ function fncIsAdmin {
     fncLog "DEBUG" "Checking administrative privileges"
 
     try {
+        $currentOS = fncGetCurrentOS
+
+        if ($currentOS -ne "Windows") {
+            # On Linux/macOS root has uid 0
+            $uid = & id -u 2>$null
+            return ($uid -eq "0")
+        }
+
         $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-        $p  = New-Object Security.Principal.WindowsPrincipal($id)
+        $p = New-Object Security.Principal.WindowsPrincipal($id)
         return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     }
     catch {
@@ -152,11 +154,14 @@ function fncCreateTempDir {
         fncLogException $_.Exception "fncCreateTempDir existing temp check"
     }
 
-    if (-not $global:RunLogDir) {
+    if (
+        -not $global:ProberState.PSObject.Properties.Name -contains "Runtime" -or
+        -not $global:ProberState.Runtime.RunLogDir
+    ) {
         throw "RunLogDir not initialised by runner."
     }
 
-    $path = Join-Path $global:RunLogDir "Temp"
+    $path = Join-Path $global:ProberState.Runtime.RunLogDir "Temp"
 
     try {
         New-Item -ItemType Directory -Path $path -Force | Out-Null
@@ -183,7 +188,8 @@ function fncCleanupTempDir {
 
             Remove-Item $global:ProberState.TempDir -Recurse -Force -ErrorAction SilentlyContinue
         }
-    } catch {
+    }
+    catch {
         fncLogException $_.Exception "fncCleanupTempDir"
     }
 
@@ -195,12 +201,18 @@ function fncGetEnvProfile {
     fncLog "DEBUG" "fncGetEnvProfile invoked"
 
     try {
+        $currentOS = fncGetCurrentOS
+
+        if ($currentOS -ne "Windows") {
+            fncLog "DEBUG" ("Non-Windows platform ({0}), returning Workstation" -f $currentOS)
+            return "Workstation"
+        }
 
         $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
-        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        $osi = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
 
         $isServer = $false
-        if ($os -and $os.Caption -match "(?i)\bserver\b") { $isServer = $true }
+        if ($osi -and $osi.Caption -match "(?i)\bserver\b") { $isServer = $true }
 
         $isDC = $false
         if ($cs -and $cs.DomainRole -ge 4) { $isDC = $true }
@@ -229,8 +241,8 @@ function fncGetEnvProfile {
 # ------------------------------------------------------------
 function fncAskYesNo {
     param(
-        [Parameter(Mandatory=$true)][string]$Question,
-        [ValidateSet("Y","N")][string]$Default = "N"
+        [Parameter(Mandatory = $true)][string]$Question,
+        [ValidateSet("Y", "N")][string]$Default = "N"
     )
 
     try { if (Get-Command fncLog -ErrorAction SilentlyContinue) { fncLog "DEBUG" ("Prompt issued: {0}" -f $Question) } } catch {}
@@ -245,10 +257,10 @@ function fncAskYesNo {
         }
 
         switch ($ans.Trim().ToLower()) {
-            "y"   { return $true }
+            "y" { return $true }
             "yes" { return $true }
-            "n"   { return $false }
-            "no"  { return $false }
+            "n" { return $false }
+            "no" { return $false }
             default { fncPrintMessage "Please enter Y or N." "warning" }
         }
     }
@@ -268,12 +280,12 @@ function fncPause {
 function fncTryGetRegistryValue {
 
     param(
-        [Parameter(Mandatory=$true)][string]$Path,
-        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
         $Default = $null
     )
 
-    fncLog "DEBUG" ("Registry lookup requested: {0} -> {1}" -f $Path,$Name)
+    fncLog "DEBUG" ("Registry lookup requested: {0} -> {1}" -f $Path, $Name)
 
     try {
 
@@ -297,325 +309,7 @@ function fncTryGetRegistryValue {
 function fncInitFindings {
 
     fncLog "DEBUG" "Initialising findings container"
-    $global:ProberState.Findings = @()
-}
-
-function fncAddFinding {
-
-  param(
-    [Parameter(Mandatory=$true)][string]$Id,
-
-    [string]$TestId = "",
-    [string]$Category = "Uncategorised",
-    [string]$Title = "",
-
-    [ValidateSet("Info","Low","Medium","High","Critical")]
-    [string]$Severity = "Info",
-
-    [string]$Status = "",
-    [string]$Message = "",
-
-    [string]$Recommendation = "",
-
-    [string]$Exploitation = "",
-    [string]$Remediation  = ""
-  )
-
-  fncLog "DEBUG" ("Adding finding: {0} ({1})" -f $Id, $Severity)
-
-  if (-not $global:ProberState.Findings) {
-    $global:ProberState.Findings = @()
-  }
-
-  $global:ProberState.Findings = @(
-    $global:ProberState.Findings |
-      Where-Object { $_ -and $_.Id -ne $Id }
-  )
-
-  $testMeta = $null
-
-  try {
-    if (-not [string]::IsNullOrWhiteSpace($TestId) -and
-        $global:ProberState -and
-        $global:ProberState.Tests) {
-
-      $testMeta = @(
-        $global:ProberState.Tests |
-          Where-Object { $_ -and $_.Id -eq $TestId } |
-          Select-Object -First 1
-      )[0]
-    }
-  }
-  catch {
-    fncLogException $_.Exception "fncAddFinding metadata lookup"
-  }
-
-  $mitre = @()
-  $cwe   = @()
-  $nist  = @()
-  $refs  = @()
-
-  $primaryCategory = $null
-  $subCategories   = @()
-
-  $scopes         = @()
-  $requiresAdmin  = $false
-  $enabled        = $true
-  $schemaVersion  = $null
-  $testName       = $null
-  $testFunction   = $null
-  $testDesc       = $null
-
-  if ($null -ne $testMeta) {
-
-    try {
-
-      if ($testMeta.PSObject.Properties.Name -contains "SchemaVersion") {
-        $schemaVersion = $testMeta.SchemaVersion
-      }
-
-      $testName     = $testMeta.Name
-      $testFunction = $testMeta.Function
-      $testDesc     = $testMeta.Description
-
-      if ($testMeta.Category -and
-          $testMeta.Category.PSObject.Properties.Name -contains "Primary") {
-
-        $primaryCategory = $testMeta.Category.Primary
-
-        if ($testMeta.Category.PSObject.Properties.Name -contains "Subcategories") {
-          $subCategories = @($testMeta.Category.Subcategories)
-        }
-      }
-
-      if ($testMeta.Scopes) {
-        $scopes = @($testMeta.Scopes)
-      }
-
-      if ($null -ne $testMeta.RequiresAdmin) {
-        $requiresAdmin = [bool]$testMeta.RequiresAdmin
-      }
-
-      if ($null -ne $testMeta.Enabled) {
-        $enabled = [bool]$testMeta.Enabled
-      }
-
-      if ($testMeta.Mappings) {
-
-        if ($testMeta.Mappings.MitreAttack) {
-
-            $seenMitre = @{}
-
-            foreach ($m in @($testMeta.Mappings.MitreAttack)) {
-
-                if (-not $m) { continue }
-
-                $techId   = ""
-                $techName = ""
-                $tactic   = ""
-                $url      = ""
-
-                if ($schemaVersion -ge 5 -and
-                    $m.PSObject.Properties.Name -contains "Technique") {
-
-                    $techObj = $m.Technique
-                    $tacObj  = $m.Tactic
-
-                    if ($techObj -and $techObj.Id) {
-
-                        $techId = $techObj.Id
-
-                        if ($techObj.SubTechnique -and
-                            -not [string]::IsNullOrWhiteSpace($techObj.SubTechnique)) {
-
-                            $techId = "$($techObj.Id).$($techObj.SubTechnique)"
-                        }
-
-                        $techName = $techObj.Name
-                        $url      = $techObj.Url
-                    }
-
-                    if ($tacObj -and $tacObj.Name) {
-                        $tactic = $tacObj.Name
-                    }
-                }
-
-                elseif ($m.Technique) {
-
-                    $techId = $m.Technique
-
-                    if ($m.SubTechnique -and
-                        -not [string]::IsNullOrWhiteSpace($m.SubTechnique)) {
-
-                        $techId = "$($m.Technique).$($m.SubTechnique)"
-                    }
-
-                    $techName = $m.Name
-                    $tactic   = $m.Tactic
-                    $url      = $m.Url
-                }
-
-                if (-not [string]::IsNullOrWhiteSpace($techId) -and
-                    -not $seenMitre.ContainsKey($techId)) {
-
-                    $mitre += [pscustomobject]@{
-                        Id     = $techId
-                        Name   = $techName
-                        Tactic = $tactic
-                        Url    = $url
-                    }
-
-                    $seenMitre[$techId] = $true
-                }
-            }
-        }
-
-        if ($testMeta.Mappings.CWE) {
-
-            foreach ($c in @($testMeta.Mappings.CWE)) {
-
-                if (-not $c) { continue }
-
-                $id   = ""
-                $name = ""
-                $url  = ""
-
-                if ($schemaVersion -ge 5 -and
-                    $c.PSObject.Properties.Name -contains "Weakness") {
-
-                    $w = $c.Weakness
-
-                    if ($w -and $w.Id) {
-                        $id   = $w.Id
-                        $name = $w.Name
-                        $url  = $w.Url
-                    }
-                }
-
-                elseif ($c.Id) {
-
-                    $id   = $c.Id
-                    $name = $c.Name
-                    $url  = $c.Url
-                }
-
-                if (-not [string]::IsNullOrWhiteSpace($id)) {
-
-                    $cwe += [pscustomobject]@{
-                        Id   = $id
-                        Name = $name
-                        Url  = $url
-                    }
-                }
-            }
-        }
-
-        if ($testMeta.Mappings.Nist) {
-
-            foreach ($n in @($testMeta.Mappings.Nist)) {
-
-                if (-not $n) { continue }
-
-                $id   = ""
-                $name = ""
-                $url  = ""
-
-                if ($schemaVersion -ge 5 -and
-                    $n.PSObject.Properties.Name -contains "Control") {
-
-                    $ctrl = $n.Control
-
-                    if ($ctrl -and $ctrl.Id) {
-                        $id   = $ctrl.Id
-                        $name = $ctrl.Name
-                        $url  = $ctrl.Url
-                    }
-                }
-
-                elseif ($n.Control) {
-
-                    $id   = $n.Control
-                    $name = $n.Name
-                    $url  = $n.Url
-                }
-
-                if (-not [string]::IsNullOrWhiteSpace($id)) {
-
-                    $nist += [pscustomobject]@{
-                        Id   = $id
-                        Name = $name
-                        Url  = $url
-                    }
-                }
-            }
-        }
-      }
-
-      if ($testMeta.References) {
-        $refs = @($testMeta.References)
-      }
-
-    }
-    catch {
-      fncLogException $_.Exception "fncAddFinding metadata extraction"
-    }
-  }
-
-  $global:ProberState.Findings += [pscustomobject]@{
-    Id           = $Id
-    Category     = $Category
-    Title        = $Title
-    Severity     = $Severity
-    Status       = $Status
-    Message      = $Message
-
-    Recommendation = $Recommendation
-    Exploitation   = $Exploitation
-    Remediation    = $Remediation
-
-    TestMeta = [pscustomobject]@{
-      SchemaVersion = $schemaVersion
-      Name          = $testName
-      Function      = $testFunction
-      Description   = $testDesc
-      Enabled       = $enabled
-      RequiresAdmin = $requiresAdmin
-      Scopes        = $scopes
-
-      Category = [pscustomobject]@{
-        Primary       = $primaryCategory
-        Subcategories = $subCategories
-      }
-
-      References = $refs
-    }
-
-    Mitre     = $mitre
-    CWE       = $cwe
-    NIST      = $nist
-
-    Timestamp = Get-Date
-  }
-}
-
-function fncRegisterConsoleBreakHandler {
-
-    param([scriptblock]$OnBreak = {})
-
-    fncLog "DEBUG" "Registering console break handler"
-
-    try {
-        Unregister-Event ConsoleBreak -ErrorAction SilentlyContinue | Out-Null
-    } catch {}
-
-    try {
-        Register-EngineEvent ConsoleBreak -SupportEvent -Action {
-            try { & $using:OnBreak } catch {}
-            try { $event.Sender.Cancel = $true } catch {}
-        } | Out-Null
-    } catch {
-        fncLogException $_.Exception "fncRegisterConsoleBreakHandler"
-    }
+    $global:ProberState.Findings = @{}
 }
 
 function fncSafeArray {
@@ -647,13 +341,20 @@ function fncSafeString {
     } return [string]$Value 
 }
 
+# Cache for fncCommandExists - only positive (found) results are cached.
+# Negative results are NOT cached so lazy-loaded modules are detected after load.
+$script:_cmdExistsCache = @{}
+
 function fncCommandExists {
-    param([Parameter(Mandatory=$true)][string]$Name)
-    return [bool](Get-Command -Name $Name -ErrorAction SilentlyContinue)
+    param([Parameter(Mandatory = $true)][string]$Name)
+    if ($script:_cmdExistsCache[$Name]) { return $true }
+    $found = [bool](Get-Command -Name $Name -ErrorAction SilentlyContinue)
+    if ($found) { $script:_cmdExistsCache[$Name] = $true }
+    return $found
 }
 
 function fncSafePrintMessage {
-    param([string]$Msg,[string]$Level="info")
+    param([string]$Msg, [string]$Level = "info")
 
     if (fncCommandExists "fncPrintMessage") {
         fncPrintMessage $Msg $Level
@@ -670,8 +371,6 @@ function fncSafePause {
 
 function fncSafeRenderHeader {
     if (fncCommandExists "fncRenderHeader") { fncRenderHeader; return }
-    Clear-Host
-    Write-Host ""
 }
 
 function fncSafeSectionHeader {
@@ -681,7 +380,7 @@ function fncSafeSectionHeader {
         fncRenderSectionHeader -Title $Title
         return
     }
-
+    fncSafeDivider
     Write-Host ("==== {0} ====" -f $Title)
 }
 
@@ -691,14 +390,14 @@ function fncSafeDivider {
 }
 
 function fncSafeMenuOption {
-    param([string]$Key,[string]$Label)
+    param([string]$Key, [string]$Label)
 
     if (fncCommandExists "fncRenderMenuOption") {
         fncRenderMenuOption -Key $Key -Label $Label
         return
     }
 
-    Write-Host ("[{0}] {1}" -f $Key,$Label)
+    Write-Host ("[{0}] {1}" -f $Key, $Label)
 }
 
 function fncSafeBackQuit {
@@ -711,9 +410,96 @@ function fncSafeBackQuit {
     Write-Host "[Q] Quit"
 }
 
+function fncRiskColour {
+
+    param([string]$Risk)
+
+    switch ($Risk) {
+
+        "Safe" { return "Green" }
+        "Low" { return "DarkGreen" }
+        "Medium" { return "Yellow" }
+        "High" { return "DarkRed" }
+        "Dangerous" { return "Magenta" }
+
+        default { return "Gray" }
+    }
+}
+
+function fncPrintRisk {
+
+    param(
+        [string]$Risk,
+        [string]$Reason
+    )
+
+    $colour = fncRiskColour $Risk
+
+    if ([string]::IsNullOrWhiteSpace($Reason)) {
+        fncSafeDivider
+        fncWriteColour ("Risk: {0}" -f $Risk) $colour
+    }
+    else {
+        fncWriteColour ("Risk: {0} ({1})" -f $Risk, $Reason) $colour
+    }
+}
+
+function fncMaturityColour {
+
+    param([string]$Level)
+
+    switch ($Level) {
+
+        "Stable" { return "Green" }
+        "Beta" { return "Yellow" }
+        "Experimental" { return "DarkYellow" }
+        "Deprecated" { return "Red" }
+
+        default { return "Gray" }
+    }
+}
+
+function fncStrategyColour {
+
+    param([string]$Strategy)
+
+    switch ($Strategy) {
+
+        "Offensive" { return "Red" }
+        "Defensive" { return "Cyan" }
+
+        default { return "Gray" }
+    }
+}
+
+function fncOSColour {
+
+    param([string]$OS)
+
+    switch ($OS) {
+
+        "Windows" { return "Blue" }
+        "Linux" { return "DarkYellow" }
+        "macOS" { return "White" }
+        "Cloud" { return "Cyan" }
+
+        default { return "DarkGray" }
+    }
+}
+
+function fncSaveExecutionHistory {
+
+    $path = Join-Path $global:ProberState.Runtime.RunLogDir "history.json"
+
+    $json = $global:ProberState.ExecutionHistory |
+    ConvertTo-Json -Depth 5
+
+    $json | Out-File $path -Encoding UTF8
+}
+
 function fncReadJsonFileSafe {
     param(
-        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Path,
         $Default = $null
     )
 
@@ -732,8 +518,8 @@ function fncReadJsonFileSafe {
 
 function fncWriteJsonFileSafe {
     param(
-        [Parameter(Mandatory=$true)][string]$Path,
-        [Parameter(Mandatory=$true)]$Object,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)]$Object,
         [int]$Depth = 15
     )
 
@@ -747,10 +533,21 @@ function fncWriteJsonFileSafe {
     }
 }
 
+function fncTryParseVersion {
+    param([string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+
+    $m = [regex]::Match($Text.Trim(), '^\s*(\d+(\.\d+){0,4})')
+    if (-not $m.Success) { return $null }
+
+    try { return [version]$m.Groups[1].Value } catch { return $null }
+}
+
 function fncSafeHasProp {
     param(
-        [Parameter(Mandatory=$true)]$Obj,
-        [Parameter(Mandatory=$true)][string]$Name
+        [Parameter(Mandatory = $true)]$Obj,
+        [Parameter(Mandatory = $true)][string]$Name
     )
     if ($null -eq $Obj) { return $false }
     try { return ($Obj.PSObject.Properties.Name -contains $Name) } catch { return $false }
@@ -758,31 +555,17 @@ function fncSafeHasProp {
 
 function fncSafeGetProp {
     param(
-        [Parameter(Mandatory=$true)]$Obj,
-        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory = $true)]$Obj,
+        [Parameter(Mandatory = $true)][string]$Name,
         $Default = $null
     )
     if (-not (fncSafeHasProp $Obj $Name)) { return $Default }
     try { return $Obj.$Name } catch { return $Default }
 }
 
-function fncToSafeString {
-    param($Value)
-
-    if ($null -eq $Value) { return "" }
-
-    try { return [string]$Value }
-    catch { return "" }
-}
 
 function fncGetUtcNowIso {
     return (Get-Date).ToUniversalTime().ToString("o")
-}
-
-function fncToSafeString {
-    param($Value)
-    if ($null -eq $Value) { return "" }
-    return [string]$Value
 }
 
 function fncFormatColumn {
@@ -802,6 +585,70 @@ function fncFormatColumn {
     return $t.PadRight($Width)
 }
 
+# ---------------------------------------------------------------
+# Function: fncGetAVSafePath
+# Purpose : Returns the best available directory for dropping
+#           files that AV/EDR is unlikely to delete on creation.
+#           Enumerates Defender exclusion paths and returns the
+#           first one that is present and user-writable.
+#           Falls back to $env:TEMP if none are found.
+#           Result is cached in ProberState so repeat calls
+#           within a run are instantaneous.
+# Usage   : $dir = fncGetAVSafePath
+#           $file = Join-Path (fncGetAVSafePath) "output.dmp"
+# ---------------------------------------------------------------
+function fncGetAVSafePath {
+
+    # Return cached value from this run if already resolved
+    try {
+        $cached = fncSafeGetProp $global:ProberState "_AVSafePath" $null
+        if ($cached -and (Test-Path $cached)) {
+            fncLog "DEBUG" ("fncGetAVSafePath returning cached: {0}" -f $cached)
+            return $cached
+        }
+    }
+    catch {}
+
+    $safePath = try { [System.IO.Path]::GetTempPath() } catch { if ($env:TEMP) { $env:TEMP } elseif ($env:TMPDIR) { $env:TMPDIR } else { "/tmp" } }
+
+    try {
+        $defPrefs = Get-MpPreference -ErrorAction Stop
+
+        foreach ($excPath in @($defPrefs.ExclusionPath | Where-Object { $_ })) {
+
+            if (-not (Test-Path $excPath)) { continue }
+
+            # Confirm the path is writable by the current process
+            $probe = Join-Path $excPath ([System.IO.Path]::GetRandomFileName())
+            try {
+                [System.IO.File]::WriteAllText($probe, "x")
+                Remove-Item $probe -Force -ErrorAction SilentlyContinue
+                $safePath = $excPath
+                fncLog "INFO" ("fncGetAVSafePath found Defender-excluded writable path: {0}" -f $safePath)
+                break
+            }
+            catch {}
+        }
+    }
+    catch {
+        fncLog "DEBUG" ("fncGetAVSafePath could not query Defender exclusions: {0}" -f $_.Exception.Message)
+    }
+
+    # Cache in ProberState for the lifetime of this run
+    try {
+        if (fncSafeHasProp $global:ProberState "_AVSafePath") {
+            $global:ProberState._AVSafePath = $safePath
+        }
+        else {
+            $global:ProberState | Add-Member -MemberType NoteProperty -Name "_AVSafePath" -Value $safePath -Force
+        }
+    }
+    catch {}
+
+    fncLog "DEBUG" ("fncGetAVSafePath resolved to: {0}" -f $safePath)
+    return $safePath
+}
+
 function fncIsCacheFresh {
     param(
         [string]$Path,
@@ -816,7 +663,7 @@ function fncIsCacheFresh {
 
 Export-ModuleMember -Function @(
     "fncGetScriptDirectory",
-    "fncInitProberState",
+    "fncGetCurrentOS",
     "fncIsAdmin",
     "fncCreateTempDir",
     "fncCleanupTempDir",
@@ -825,8 +672,12 @@ Export-ModuleMember -Function @(
     "fncPause",
     "fncTryGetRegistryValue",
     "fncInitFindings",
-    "fncAddFinding",
-    "fncRegisterConsoleBreakHandler",
+    "fncRiskColour",
+    "fncPrintRisk",
+    "fncMaturityColour",
+    "fncStrategyColour",
+    "fncOSColour",
+    "fncSaveExecutionHistory",
     "fncSafeCount",
     "fncSafeArray",
     "fncSafeString",
@@ -840,10 +691,11 @@ Export-ModuleMember -Function @(
     "fncSafeBackQuit",
     "fncSafeHasProp",
     "fncSafeGetProp",
-    "fncToSafeString",
     "fncGetUtcNowIso",
     "fncReadJsonFileSafe",
     "fncWriteJsonFileSafe",
     "fncFormatColumn",
-    "fncIsCacheFresh"
+    "fncIsCacheFresh",
+    "fncTryParseVersion",
+    "fncGetAVSafePath"
 )

@@ -1,0 +1,2570 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ThePr0b3r - Security Report</title>
+
+  <!-- Bootstrap + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #050509;
+      --bg-main-alt: #050509;
+      --bg-card: #0b0f16;
+      --bg-card-soft: #121621;
+      --bg-sidebar: #050509;
+
+      --accent: #ef4444;
+      --accent-soft: rgba(239, 68, 68, 0.18);
+
+      --text-primary: #f9fafb;
+      --text-muted: #9ca3af;
+
+      --divider: #1f2933;
+
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #fbbf24;
+      --info: #60a5fa;
+
+      --sev-Critical: #ef4444;
+      --sev-High: #fb923c;
+      --sev-Medium: #facc15;
+      --sev-Low: #34d399;
+      --sev-Info: #60a5fa;
+
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 8px;
+    }
+
+    /* ==== LIGHT THEME ==== */
+    html[data-theme="light"] {
+      --bg-main: #f3f4f6;
+      --bg-main-alt: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-soft: #f9fafb;
+      --bg-sidebar: #111827;
+
+      --accent: #b91c1c;
+      --accent-soft: rgba(185, 28, 28, 0.14);
+
+      --text-primary: #111827;
+      --text-muted: #6b7280;
+
+      --divider: #e5e7eb;
+
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #facc15;
+      --info: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 0% 0%,
+          rgba(248, 113, 113, 0.12) 0,
+          transparent 55%),
+        var(--bg-main);
+      color: var(--text-primary);
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    html[data-theme="light"] body {
+      background: radial-gradient(circle at 0% 0%,
+          rgba(248, 113, 113, 0.16) 0,
+          transparent 50%),
+        var(--bg-main);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-sidebar);
+      min-height: 100vh;
+      border-right: 1px solid var(--divider);
+      position: sticky;
+      top: 0;
+    }
+
+    .sidebar h4 {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .sidebar h6 {
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      margin-top: 1.5rem;
+      margin-bottom: 0.4rem;
+      color: var(--text-muted);
+    }
+
+    .sidebar .nav-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #e5e7ff;
+      padding: 9px 14px;
+      margin-bottom: 4px;
+      border-radius: var(--radius-md);
+      transition: all 0.15s ease-in-out;
+      font-size: 0.9rem;
+      opacity: 0.92;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sidebar .nav-link .left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar .nav-link i {
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+
+    .sidebar .nav-link:hover {
+      background: rgba(239, 68, 68, 0.14);
+      color: #ffffff;
+      transform: translateX(1px);
+      opacity: 1;
+    }
+
+    .sidebar .nav-link.active {
+      background-color: rgba(239, 68, 68, 0.18);
+      color: #ffffff;
+      font-weight: 500;
+      box-shadow: inset 2px 0 0 var(--accent);
+      opacity: 1;
+    }
+
+    .sidebar .count-pill {
+      min-width: 34px;
+      text-align: center;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: #e5e7eb;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    html[data-theme="light"] .sidebar .nav-link {
+      color: #e5e7eb;
+    }
+
+    html[data-theme="light"] .sidebar .count-pill {
+      color: #e5e7eb;
+    }
+
+    /* Topbar */
+    .topbar {
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg,
+          var(--bg-card-soft) 0%,
+          #0a0e16 100%);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1.2rem;
+      margin-top: 1rem;
+      margin-bottom: 1.2rem;
+    }
+
+    html[data-theme="light"] .topbar {
+      background: #ffffff;
+      border-color: #e5e7eb;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    }
+
+    .topbar-left-sub {
+      font-size: 0.75rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+
+    .topbar-left-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+    }
+
+    html[data-theme="light"] .card {
+      background: #ffffff;
+      border-color: #e5e7eb;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    .card-title {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.55rem;
+    }
+
+    .metric-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+    }
+
+    /* Buttons (make them readable) */
+    .btn-accent {
+      background: linear-gradient(135deg, var(--accent) 0%, #7f1d1d 100%);
+      border: none;
+      color: white;
+      border-radius: var(--radius-md);
+      font-weight: 500;
+      font-size: 0.9rem;
+      padding: 0.45rem 0.95rem;
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+    }
+
+    .btn-accent:hover {
+      background: linear-gradient(135deg, #f97373 0%, #7f1d1d 100%);
+      color: #fff;
+      box-shadow: 0 0 18px rgba(239, 68, 68, 0.32);
+    }
+
+    .btn-outline-light {
+      border-color: rgba(148, 163, 184, 0.6);
+      color: #e5e7eb;
+      background: transparent;
+    }
+
+    .btn-outline-light:hover {
+      background: rgba(148, 163, 184, 0.12);
+      color: #ffffff;
+      border-color: rgba(248, 113, 113, 0.55);
+    }
+
+    html[data-theme="light"] .btn-outline-light {
+      color: #111827;
+      border-color: rgba(17, 24, 39, 0.25);
+    }
+
+    html[data-theme="light"] .btn-outline-light:hover {
+      background: rgba(185, 28, 28, 0.1);
+      border-color: rgba(185, 28, 28, 0.35);
+    }
+
+    /* Page containers */
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /* Findings list */
+    .findings-toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .searchbar {
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .searchbar input {
+      background: rgba(11, 15, 22, 0.55);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      width: 100%;
+    }
+
+    html[data-theme="light"] .searchbar input {
+      background: #ffffff;
+      color: #111827;
+      border-color: #e5e7eb;
+    }
+
+    /* Severity left border per finding */
+    .finding {
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: linear-gradient(180deg,
+          rgba(18, 22, 33, 0.6) 0%,
+          rgba(11, 15, 22, 0.9) 100%);
+      padding: 14px 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    html[data-theme="light"] .finding {
+      background: #ffffff;
+      border-color: #e5e7eb;
+    }
+
+    .finding::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: transparent;
+      opacity: 0.95;
+    }
+
+    .finding-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .sev-pill {
+      border-radius: 999px;
+      padding: 0.18rem 0.55rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .sev-pill.Critical {
+      border-color: rgba(248, 113, 113, 0.7);
+      background: rgba(239, 68, 68, 0.16);
+      color: #fecaca;
+    }
+
+    .sev-pill.High {
+      border-color: rgba(251, 146, 60, 0.7);
+      background: rgba(251, 146, 60, 0.12);
+      color: #fed7aa;
+    }
+
+    .sev-pill.Medium {
+      border-color: rgba(234, 179, 8, 0.65);
+      background: rgba(251, 191, 36, 0.12);
+      color: #fde68a;
+    }
+
+    .sev-pill.Low {
+      border-color: rgba(16, 185, 129, 0.55);
+      background: rgba(52, 211, 153, 0.12);
+      color: #a7f3d0;
+    }
+
+    .sev-pill.Info {
+      border-color: rgba(96, 165, 250, 0.7);
+      background: rgba(59, 130, 246, 0.14);
+      color: #bfdbfe;
+    }
+
+    .finding-title {
+      font-size: 0.98rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .finding-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    /* Metadata bubbles (click-to-filter) */
+    .meta-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .meta-bubble {
+      border-radius: 999px;
+      font-size: 0.75rem;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(148, 163, 184, 0.08);
+      color: #e5e7eb;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    html[data-theme="light"] .meta-bubble {
+      color: #111827;
+      background: rgba(17, 24, 39, 0.04);
+      border-color: rgba(17, 24, 39, 0.12);
+    }
+
+    .meta-bubble:hover {
+      border-color: rgba(248, 113, 113, 0.65);
+      color: var(--accent);
+    }
+
+    /* CVSS heat pill */
+    .cvss-pill {
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: #0b0f16;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+    }
+
+    /* Accordion body */
+    .finding-body {
+      margin-top: 12px;
+      color: #e5e7eb;
+    }
+
+    html[data-theme="light"] .finding-body {
+      color: #111827;
+    }
+
+    .finding-body .label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 4px;
+    }
+
+    .finding-body .box {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(11, 15, 22, 0.4);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    html[data-theme="light"] .finding-body .box {
+      background: #f9fafb;
+      border-color: #e5e7eb;
+    }
+
+    /* CIS evidence block */
+    .cis-evidence-block {
+      margin-top: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      overflow: hidden;
+      font-size: 0.8rem;
+    }
+
+    .cis-evidence-meta {
+      padding: 8px 12px;
+      background: rgba(11, 15, 22, 0.5);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      color: var(--text-muted);
+      font-family: monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    html[data-theme="light"] .cis-evidence-meta {
+      background: #f3f4f6;
+      border-bottom-color: #e5e7eb;
+    }
+
+    .cis-rule-entry {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    }
+
+    .cis-rule-entry:last-child { border-bottom: none; }
+
+    .cis-rule-entry.pass { background: rgba(52, 211, 153, 0.04); }
+    .cis-rule-entry.fail { background: rgba(239, 68, 68, 0.06); }
+
+    .cis-rule-badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 0.1rem 0.45rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 6px;
+    }
+
+    .cis-rule-badge.pass { background: rgba(52, 211, 153, 0.18); color: #34d399; border: 1px solid rgba(52,211,153,0.3); }
+    .cis-rule-badge.fail { background: rgba(239, 68, 68, 0.18);  color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+    .cis-rule-type {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .cis-rule-cmd {
+      margin-top: 4px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #93c5fd;
+      word-break: break-all;
+    }
+
+    .cis-rule-output {
+      margin-top: 3px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #e5e7eb;
+      white-space: pre-wrap;
+      word-break: break-all;
+      opacity: 0.85;
+    }
+
+    html[data-theme="light"] .cis-rule-cmd { color: #1d4ed8; }
+    html[data-theme="light"] .cis-rule-output { color: #374151; }
+
+    /* Modal */
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      color: var(--text-primary);
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 767.98px) {
+      .sidebar {
+        display: none;
+      }
+
+      .topbar {
+        margin-top: 0.5rem;
+        border-radius: var(--radius-md);
+      }
+
+      .card {
+        border-radius: var(--radius-md);
+      }
+    }
+
+    /* Make muted text actually readable in dark mode */
+    html[data-theme="dark"] .text-muted {
+      color: #e5e7eb !important;
+      opacity: 0.78;
+    }
+
+    .context-bubble {
+      border-radius: 999px;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.7rem;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(148, 163, 184, 0.08);
+      color: #e5e7eb;
+      letter-spacing: 0.05em;
+    }
+
+    html[data-theme="light"] .context-bubble {
+      color: #111827;
+      letter-spacing: 0.03em;
+      background: rgba(17, 24, 39, 0.04);
+      border-color: rgba(17, 24, 39, 0.15);
+    }
+
+    .context-bubble.primary {
+      border-color: rgba(239, 68, 68, 0.65);
+      background: rgba(239, 68, 68, 0.18);
+      color: #fecaca;
+    }
+
+    .context-bubble.success {
+      border-color: rgba(34, 197, 94, 0.55);
+      background: rgba(34, 197, 94, 0.15);
+      color: #bbf7d0;
+    }
+
+    .context-bubble.warning {
+      border-color: rgba(251, 191, 36, 0.55);
+      background: rgba(251, 191, 36, 0.15);
+      color: #fde68a;
+    }
+
+    #chartSeverity {
+      max-height: 285px;
+    }
+
+    #chartCategory {
+      max-height: 285px;
+    }
+
+    #chartCis {
+      max-height: 285px;
+    }
+
+    #mitreModal .modal-dialog {
+      max-width: 1400px;
+      width: 95vw;
+    }
+
+    #cvssModal .modal-content {
+      font-size: 13px;
+    }
+
+    #cvssModal .editor-field label {
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+    }
+
+    #cvssModal select {
+      padding: 12px 14px;
+      font-size: 0.75rem;
+    }
+
+    #cvssModal .box {
+      font-size: 1rem;
+    }
+
+    #cvssModal .modal-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    /* Markdown Code Block Styling */
+    #pg_output pre {
+      background: #0b0f16;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 14px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+    }
+
+    #pg_output code {
+      color: #e5e7eb;
+      font-family: Consolas, monospace;
+    }
+
+    datalist {
+      background: #0b0f16;
+      color: #e5e7eb;
+    }
+
+    input[list] {
+      position: relative;
+      z-index: 9999;
+    }
+
+    .modal {
+      z-index: 2000;
+    }
+
+    .modal-backdrop {
+      z-index: 1990;
+    }
+
+    /* Markdown preview */
+
+    [id$="_preview"] {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(11, 15, 22, 0.4);
+      border-radius: 12px;
+      padding: 14px;
+
+      font-size: 0.9rem;
+      line-height: 1.5;
+
+      overflow-y: auto;
+    }
+
+    [id$="_preview"] code {
+      background: #0b0f16;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    [id$="_preview"] pre {
+      background: #0b0f16;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    /* Framework inputs (MITRE / NIST / CWE) */
+
+    #nf_mitre_list input,
+    #nf_nist_list input,
+    #nf_cwe_list input {
+      background: rgba(11, 15, 22, 0.6);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+    }
+
+    #nf_mitre_list input::placeholder,
+    #nf_nist_list input::placeholder,
+    #nf_cwe_list input::placeholder {
+      color: var(--text-muted);
+    }
+
+    #nf_mitre_list input:focus,
+    #nf_nist_list input:focus,
+    #nf_cwe_list input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+    }
+
+    /* Markdown editor layout */
+
+    .markdown-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+
+      margin-bottom: 18px;
+    }
+
+    /* Editor */
+
+    .markdown-editor textarea {
+      width: 100%;
+      min-height: 180px;
+      background: rgba(11, 15, 22, 0.6);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 0.9rem;
+      resize: vertical;
+    }
+
+    .markdown-editor textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+    }
+
+    .markdown-preview-box {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(11, 15, 22, 0.4);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 180px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Toast Notifications -->
+  <div class="toast-container position-fixed top-0 end-0 p-3" id="toastHolder"></div>
+
+  <!-- Hamburger (Mobile Only) -->
+  <button class="btn btn-dark d-md-none m-3" data-bs-toggle="offcanvas" data-bs-target="#offcanvasMenu">
+    <i class="bi bi-list"></i> Menu
+  </button>
+
+  <!-- Sidebar Mobile -->
+  <div class="offcanvas offcanvas-start d-md-none" tabindex="-1" id="offcanvasMenu">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title">🧬 ThePr0b3r</h5>
+      <button class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="d-grid gap-2">
+        <button class="btn btn-outline-light" onclick="setPage('overview')">
+          Overview
+        </button>
+        <button class="btn btn-outline-light" onclick="setPage('findings')">
+          Findings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Layout -->
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Sidebar -->
+      <nav class="col-md-2 d-none d-md-block sidebar p-3">
+        <h4 class="text-light mb-4">🧬 ThePr0b3r</h4>
+
+        <!-- Dashboard -->
+        <h6>Dashboard</h6>
+
+        <div class="nav-link active" data-nav="page" data-page="overview" onclick="setPage('overview')">
+          <span class="left"><i class="bi bi-speedometer2"></i> Overview</span>
+          <span class="count-pill" id="countAll">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="page" data-page="findings" onclick="setPage('findings')">
+          <span class="left"><i class="bi bi-flag"></i> Findings</span>
+          <span class="count-pill" id="countFindings">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="page" data-page="cis-audit" onclick="setPage('cis-audit')">
+          <span class="left"><i class="bi bi-shield-check"></i> CIS Audit</span>
+          <span class="count-pill" id="countCISAudit">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="page" data-page="mitre" onclick="openMitreOverlay()">
+          <span class="left"><i class="bi bi-diagram-3"></i> MITRE Overlay</span>
+          <span class="count-pill" id="countMitre">0</span>
+        </div>
+
+        <div class="nav-link" onclick="openNistOverlay()">
+          <span class="left"><i class="bi bi-shield-check"></i> NIST Overlay</span>
+          <span class="count-pill" id="countNist">0</span>
+        </div>
+
+        <div class="nav-link" onclick="openCweOverlay()">
+          <span class="left"><i class="bi bi-bug"></i> CWE Overlay</span>
+          <span class="count-pill" id="countCwe">0</span>
+        </div>
+
+        <div class="nav-link" onclick="openCisOverlay()">
+          <span class="left">
+            <i class="bi bi-bar-chart"></i> CIS Overlay
+          </span>
+          <span class="count-pill" id="countCis">0</span>
+        </div>
+
+        <!-- Tools -->
+        <h6>More Tools</h6>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left"><i class="bi bi-bezier2"></i> Attack Chains</span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left"><i class="bi bi-speedometer2"></i> CVSS Calculator</span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left"><i class="bi bi-terminal"></i> Payload Generator</span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left"><i class="bi bi-file-text"></i> Executive Summary</span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left"><i class="bi bi-lightning-charge"></i> Attack Simulation</span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left">
+            <i class="bi bi-fingerprint"></i>
+            Hash / File Identifier
+          </span>
+        </div>
+
+        <div class="nav-link" onclick="showWebToolNotice()">
+          <span class="left">
+            <i class="bi bi-bug"></i>
+            Quick CVE Lookup
+          </span>
+        </div>
+
+        <!-- Severity Filters -->
+        <h6>Severity</h6>
+
+        <div class="nav-link" data-nav="severity" data-sev="All" onclick="setSeverity('All')">
+          <span class="left">All</span>
+          <span class="count-pill" id="sevAll">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="severity" data-sev="Critical" onclick="setSeverity('Critical')">
+          <span class="left" style="color: #fecaca">Critical</span>
+          <span class="count-pill" id="sevCritical">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="severity" data-sev="High" onclick="setSeverity('High')">
+          <span class="left" style="color: #fed7aa">High</span>
+          <span class="count-pill" id="sevHigh">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="severity" data-sev="Medium" onclick="setSeverity('Medium')">
+          <span class="left" style="color: #fde68a">Medium</span>
+          <span class="count-pill" id="sevMedium">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="severity" data-sev="Low" onclick="setSeverity('Low')">
+          <span class="left" style="color: #a7f3d0">Low</span>
+          <span class="count-pill" id="sevLow">0</span>
+        </div>
+
+        <div class="nav-link" data-nav="severity" data-sev="Info" onclick="setSeverity('Info')">
+          <span class="left" style="color: #bfdbfe">Info</span>
+          <span class="count-pill" id="sevInfo">0</span>
+        </div>
+
+        <!-- Categories -->
+        <h6>Categories</h6>
+
+        <div class="nav-link" data-nav="category" data-cat="All" onclick="setCategory('All')">
+          <span class="left">All Categories</span>
+          <span class="count-pill" id="catAll">0</span>
+        </div>
+
+        <div id="dynamicCategories"></div>
+      </nav>
+
+      <!-- Main Panel -->
+      <main class="col-md-10 ms-sm-auto px-4">
+        <!-- Topbar -->
+        <div class="topbar">
+          <div>
+            <div class="topbar-left-sub" id="topbarSub">Security Report</div>
+
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+              <div class="topbar-left-title" id="topbarTitle">Overview</div>
+              <div id="runContextBar" class="d-flex gap-2 flex-wrap"></div>
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-light btn-sm" id="btnResetFilters" onclick="resetFilters()">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset filters
+            </button>
+
+            <button id="themeToggle" class="btn btn-outline-light btn-sm" type="button" title="Toggle theme">
+              <i id="themeIcon" class="bi bi-moon-fill"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- OVERVIEW PAGE                                             -->
+        <!-- ========================================================= -->
+        <section id="page-overview" class="page active">
+          <div class="row g-4">
+            <div class="col-lg-5">
+              <div class="card p-3 mb-4">
+                <div class="card-title">Severity Breakdown</div>
+                <canvas id="chartSeverity" height="140"></canvas>
+              </div>
+
+              <div class="card p-3">
+                <div class="card-title">Category Breakdown</div>
+                <canvas id="chartCategory" height="220"></canvas>
+              </div>
+
+              <div class="card p-3 mt-4">
+                <div class="card-title">CIS Benchmark Results</div>
+                <canvas id="chartCis" height="120"></canvas>
+              </div>
+            </div>
+            <div class="col-lg-7">
+              <div class="card p-3 mb-4">
+                <div class="card-title">MITRE Top Techniques</div>
+                <canvas id="chartMitre" height="160"></canvas>
+              </div>
+
+              <div class="card p-3 mb-4">
+                <div class="card-title">CWE Top Weaknesses</div>
+                <canvas id="chartCwe" height="160"></canvas>
+              </div>
+
+              <div class="card p-3">
+                <div class="card-title">NIST Top Controls</div>
+                <canvas id="chartNist" height="160"></canvas>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="row g-4 mt-1">
+            <div class="card p-3">
+              <div class="metric-label mb-2">Framework References</div>
+              <div class="d-flex flex-wrap gap-2">
+                <a class="meta-bubble" href="https://attack.mitre.org/" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i> MITRE ATT&CK
+                  Matrix
+                </a>
+
+                <a class="meta-bubble" href="https://attack.mitre.org/techniques/enterprise/" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i> Enterprise Techniques
+                </a>
+
+                <a class="meta-bubble" href="https://cwe.mitre.org/data/index.html" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i> CWE List
+                </a>
+
+                <a class="meta-bubble" href="https://csrc.nist.gov/projects/risk-management/about-rmf" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i> NIST RMF
+                </a>
+
+                <a class="meta-bubble" href="https://github.com/deannreid/TheProb3r" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i> TheProb3r GitHub
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- FINDINGS PAGE                                             -->
+        <!-- ========================================================= -->
+        <section id="page-findings" class="page">
+          <div class="card p-3 mb-3">
+            <div class="findings-toolbar">
+              <div class="searchbar">
+                <input id="searchInput" type="text" placeholder="Search by title, category, MITRE, CWE, NIST..." />
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <div class="dropdown">
+                  <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-sort-down"></i> Sort
+                  </button>
+
+                  <ul class="dropdown-menu dropdown-menu-dark">
+                    <li>
+                      <a class="dropdown-item" onclick="setSort('sev_desc')">Severity (High → Low)</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" onclick="setSort('sev_asc')">Severity (Low → High)</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" onclick="setSort('cvss_desc')">CVSS (High → Low)</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" onclick="setSort('cvss_asc')">CVSS (Low → High)</a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" onclick="setSort('title')">Title (A-Z)</a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 text-muted" id="activeFilterLine">
+              Showing: All findings
+            </div>
+          </div>
+
+          <div id="findingsList" class="d-flex flex-column gap-3"></div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- CIS AUDIT PAGE                                            -->
+        <!-- ========================================================= -->
+        <section id="page-cis-audit" class="page">
+          <div id="cisAuditNoData" class="card p-4 text-center" style="display:none!important">
+            <p class="text-muted mb-0">No CIS Audit data available. Run a CIS Benchmark scan first.</p>
+          </div>
+
+          <div id="cisAuditContent">
+            <!-- Stats row -->
+            <div class="row g-3 mb-4" id="cisAuditStats">
+              <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                  <div class="metric-label">Total Checks</div>
+                  <div class="display-6 fw-bold" id="cisStatTotal">-</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                  <div class="metric-label">Passed</div>
+                  <div class="display-6 fw-bold" id="cisStatPassed" style="color:#34d399">-</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                  <div class="metric-label">Failed</div>
+                  <div class="display-6 fw-bold" id="cisStatFailed" style="color:#ef4444">-</div>
+                </div>
+              </div>
+              <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                  <div class="metric-label">Pass Rate</div>
+                  <div class="display-6 fw-bold" id="cisStatRate" style="color:#60a5fa">-</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bar chart -->
+            <div class="card p-3 mb-4">
+              <div class="card-title" id="cisAuditChartTitle">CIS Benchmark Results</div>
+              <canvas id="chartCISAudit" height="80"></canvas>
+            </div>
+
+            <!-- Failed checks list -->
+            <div class="card p-3">
+              <div class="card-title">Failed Checks (<span id="cisAuditFailCount">0</span>)</div>
+              <div id="cisAuditList" class="d-flex flex-column gap-3 mt-2"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MODALS                                                    -->
+  <!-- ========================================================= -->
+
+  <div class="modal fade" id="mitreModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">MITRE Overlay</h5>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="mitreBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="webToolModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title">Feature Available on Web Server</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          These tools are available in the <strong>ThePr0b3r Web Edition</strong>.
+
+          <div class="mt-3 text-muted">
+            The static version only contains the reporting engine.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+
+<script>
+  /* =========================================================
+  GLOBAL STATE
+  ========================================================= */
+  const RUN_CONTEXT = {};
+  const FINDINGS = [];
+  const CIS_AUDIT = {};
+
+  let EFFECTIVE_FINDINGS = [];
+  let FINDING_STATS = null;
+
+  const getLMNT = (id) => document.getElementById(id);
+  const getQrySel = (sel) => document.querySelectorAll(sel);
+
+  const state = {
+    page: "overview",
+    severity: "All",
+    category: "All",
+    search: "",
+    sort: "sev_desc",
+  };
+
+  const SEVERITY_COLORS = {
+    Critical: "#ef4444",
+    High: "#fb923c",
+    Medium: "#facc15",
+    Low: "#34d399",
+    Info: "#60a5fa",
+  };
+
+  const SEV_RANK = {
+    Critical: 5,
+    High: 4,
+    Medium: 3,
+    Low: 2,
+    Info: 1,
+  };
+
+  let chartSeverity, chartCategory, chartMitre, chartCwe, chartNist, chartCis, chartCISAudit;
+
+  const themeToggleBtn = getLMNT("themeToggle");
+  const themeIcon = getLMNT("themeIcon");
+
+  function refreshAppView() {
+    updateSidebarCounts();
+    buildDynamicCategories();
+
+    if (state.page === "findings") applyFiltersAndRender();
+    if (state.page === "cis-audit") renderCISAudit();
+  }
+
+  function setTheme(mode) {
+    document.documentElement.setAttribute("data-theme", mode);
+    localStorage.setItem("notac3-theme", mode);
+    themeIcon.className =
+      mode === "dark" ? "bi bi-moon-fill" : "bi bi-sun-fill";
+  }
+
+  themeToggleBtn.addEventListener("click", () => {
+    const current =
+      document.documentElement.getAttribute("data-theme") || "dark";
+    setTheme(current === "dark" ? "light" : "dark");
+  });
+
+  (function initTheme() {
+    const saved = localStorage.getItem("notac3-theme") || "dark";
+    setTheme(saved);
+  })();
+
+  getLMNT("searchInput").addEventListener("input", (e) => {
+    state.search = (e.target.value || "").trim().toLowerCase();
+    refreshAppView();
+  });
+
+  function showWebToolNotice() {
+    new bootstrap.Modal(getLMNT("webToolModal")).show();
+  }
+
+  /* =========================================================
+  PATCH STORE
+  ========================================================= */
+  const PATCH_KEY = "thepr0b3r_patch_v1";
+
+  const PatchStore = {
+    load() {
+      try {
+        const raw = localStorage.getItem(PATCH_KEY);
+        if (!raw)
+          return { findingOverrides: {}, chains: {}, customFindings: [] };
+        const obj = JSON.parse(raw);
+        return {
+          findingOverrides: obj.findingOverrides || {},
+          chains: obj.chains || {},
+          customFindings: Array.isArray(obj.customFindings)
+            ? obj.customFindings
+            : [],
+        };
+      } catch {
+        return { findingOverrides: {}, chains: {} };
+      }
+    },
+    save(patch) {
+      localStorage.setItem(PATCH_KEY, JSON.stringify(patch));
+    },
+    clear() {
+      localStorage.removeItem(PATCH_KEY);
+    },
+  };
+
+  let PATCH = PatchStore.load();
+
+  function refreshUIAfterPatch() {
+    PatchStore.save(PATCH);
+    updateSidebarCounts();
+    buildDynamicCategories();
+    rebuildEffectiveFindings();
+    if (state.page === "findings") refreshAppView();
+  }
+
+  function sevRank(s) {
+    return SEV_RANK[s] || 0;
+  }
+
+  /* =========================================================
+  UTILITIES
+  ========================================================= */
+  function escapeHtml(str) {
+    return String(str ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function getVal(id) {
+    return (getLMNT(id)?.value || "").trim();
+  }
+
+  function showToast(msg, type = "info") {
+    const color =
+      {
+        success: "#22c55e",
+        error: "#ef4444",
+        info: "#4b5563",
+      }[type] || "#4b5563";
+
+    const toast = document.createElement("div");
+    toast.className =
+      "toast align-items-center text-white border-0 show mb-2";
+    toast.style.backgroundColor = color;
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">${escapeHtml(msg)}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>`;
+    getLMNT("toastHolder").appendChild(toast);
+    setTimeout(() => toast.remove(), 4500);
+  }
+
+  function safeText(x) {
+    return String(x ?? "");
+  }
+
+  function btn(label, onclick, variant = "outline-light") {
+    return `
+      <button class="btn btn-${variant} btn-sm"
+              type="button"
+              onclick="${onclick}">
+        ${label}
+      </button>
+    `;
+  }
+
+  function cvssBg(cvss) {
+    const s = Math.max(0, Math.min(10, Number(cvss) || 0));
+    // 0 -> green (120), 10 -> red (0)
+    const hue = 120 - s * 12;
+    return `hsl(${hue}, 85%, 55%)`;
+  }
+
+  function countMap(list, key) {
+    const m = new Map();
+    for (const item of list) {
+      const v = item[key] || "Unknown";
+      m.set(v, (m.get(v) || 0) + 1);
+    }
+    return m;
+  }
+
+  /* =========================================================
+  NAVIGATION & FILTER STATE
+  ========================================================= */
+  function setPage(page) {
+    state.page = page;
+
+    getQrySel(".page").forEach((p) => p.classList.remove("active"));
+    getLMNT(`page-${page}`).classList.add("active");
+
+    setActivePageNav(page);
+
+    const topbarTitle = getLMNT("topbarTitle");
+    const titles = {
+      overview: "Overview",
+      findings: "Findings",
+      chains: "Attack Chains",
+      "cis-audit": "CIS Audit",
+    };
+
+    topbarTitle.textContent = titles[page] || "Overview";
+
+    if (page === "findings") refreshAppView();
+    if (page === "cis-audit") renderCISAudit();
+  }
+
+  function setModalTitle(title) {
+    const modalTitle = document.querySelector("#mitreModal .modal-title");
+    if (modalTitle) modalTitle.textContent = title;
+  }
+
+  function setSeverity(sev) {
+    state.severity = sev;
+    setActiveNav("severity", "sev", sev);
+    setPage("findings");
+    refreshAppView();
+  }
+
+  function setCategory(cat) {
+    state.category = cat;
+    setActiveNav("category", "cat", cat);
+    setPage("findings");
+    refreshAppView();
+  }
+
+  function resetFilters() {
+    state.severity = "All";
+    state.category = "All";
+    state.search = "";
+    getLMNT("searchInput").value = "";
+
+    setActiveNav("severity", "sev", "All");
+    setActiveNav("category", "cat", "All");
+
+    if (state.page !== "findings") setPage("findings");
+    refreshAppView();
+    showToast("Filters reset.", "success");
+  }
+
+  function setActiveNav(group, valueKey, value) {
+    getQrySel(`.sidebar .nav-link[data-nav="${group}"]`).forEach((el) => {
+      const attr = el.getAttribute(`data-${valueKey}`);
+      el.classList.toggle("active", attr === value);
+    });
+  }
+
+  function setActivePageNav(page) {
+    getQrySel('.sidebar .nav-link[data-nav="page"]').forEach((el) => {
+      el.classList.toggle("active", el.getAttribute("data-page") === page);
+    });
+  }
+
+  function updateSidebarCounts() {
+    const eff = getFindings();
+    const nonCIS = eff.filter(f => f.category !== "CIS Benchmark");
+
+    const sev = countBy("severity");
+
+    // framework counts: re-use your collectors, but swap source
+    const mit = collectFramework(eff, "mitre");
+    const nist = collectFramework(eff, "nist");
+    const cwe = collectFramework(eff, "cwe");
+    const cis = collectFramework(eff, "cis");
+
+    const total = nonCIS.length;
+    const cisAuditFailed = eff.filter(f => f.category === "CIS Benchmark").length;
+
+    getLMNT("countAll").textContent = total;
+    getLMNT("countFindings").textContent = total;
+    getLMNT("countCISAudit").textContent = cisAuditFailed;
+
+    getLMNT("countMitre").textContent = mit.size;
+    getLMNT("countNist").textContent = nist.size;
+    getLMNT("countCwe").textContent = cwe.size;
+    getLMNT("countCis").textContent = cis.size;
+
+    getLMNT("sevAll").textContent = total;
+    getLMNT("sevCritical").textContent = sev.get("Critical") || 0;
+    getLMNT("sevHigh").textContent = sev.get("High") || 0;
+    getLMNT("sevMedium").textContent = sev.get("Medium") || 0;
+    getLMNT("sevLow").textContent = sev.get("Low") || 0;
+    getLMNT("sevInfo").textContent = sev.get("Info") || 0;
+
+    getLMNT("catAll").textContent = total;
+  }
+
+  function buildDynamicCategories() {
+    const container = getLMNT("dynamicCategories");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const map = countBy("category");
+    const sorted = Array.from(map.entries())
+      .filter(([cat]) => cat !== "CIS Benchmark")
+      .sort((a, b) => b[1] - a[1]);
+
+    for (const [cat, count] of sorted) {
+      const node = document.createElement("div");
+      node.className = "nav-link";
+      node.setAttribute("data-nav", "category");
+      node.setAttribute("data-cat", cat);
+      node.onclick = () => setCategory(cat);
+
+      node.innerHTML = `
+        <span class="left">${cat}</span>
+        <span class="count-pill">${count}</span>
+      `;
+      container.appendChild(node);
+    }
+
+    getLMNT("catAll").textContent = getFindings().length;
+  }
+
+  function setSort(mode) {
+    state.sort = mode;
+    refreshAppView();
+  }
+
+  function applyFiltersAndRender() {
+    let filtered = filterFindings();
+
+    filtered = sortFindings(filtered);
+    setFilterLine(filtered.length);
+    renderFindings(filtered);
+  }
+
+
+  /* =========================================================
+  SECTION 4 - FINDINGS ENGINE
+  ========================================================= */
+  function filterFindings() {
+    const eff = getFindings().filter(f => f.category !== "CIS Benchmark");
+    return eff.filter((f) => {
+      const okSev = state.severity === "All" || f.severity === state.severity;
+      const okCat = state.category === "All" || f.category === state.category;
+      const okSearch = matchSearch(f);
+      return okSev && okCat && okSearch;
+    });
+  }
+
+  function matchSearch(f) {
+    if (!state.search) return true;
+
+    const s = state.search.toLowerCase().trim();
+
+    const mitre = getFrameworkItems(f, "mitre");
+
+    const nist = getFrameworkItems(f, "nist");
+
+    const cwe = getFrameworkItems(f, "cwe");
+
+    const cis = getFrameworkItems(f, "cis");
+
+    if (s.startsWith("mitre:"))
+      return mitre.some(x => String(x.id || x).toLowerCase().includes(s.slice(6)));
+
+    if (s.startsWith("nist:"))
+      return nist.some(x => String(x.id || x).toLowerCase().includes(s.slice(5)));
+
+    if (s.startsWith("cwe:"))
+      return cwe.some(x => String(x.id || x).toLowerCase().includes(s.slice(4)));
+
+    if (s.startsWith("cis:"))
+      return cis.some(x => String(x.id || x).toLowerCase().includes(s.slice(4)));
+
+    const blob = [
+      f.title,
+      f.category,
+      f.severity,
+      f.status,
+      f.time,
+      ...mitre,
+      ...nist,
+      ...cwe,
+      ...cis,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return blob.includes(s);
+  }
+
+  function sortFindings(list) {
+    const rank = { Critical: 5, High: 4, Medium: 3, Low: 2, Info: 1 };
+
+    switch (state.sort) {
+      case "sev_desc":
+        return list.sort((a, b) => rank[b.severity] - rank[a.severity]);
+      case "sev_asc":
+        return list.sort((a, b) => rank[a.severity] - rank[b.severity]);
+      case "cvss_desc":
+        return list.sort(
+          (a, b) => (Number(b.cvss) || 0) - (Number(a.cvss) || 0)
+        );
+      case "cvss_asc":
+        return list.sort(
+          (a, b) => (Number(a.cvss) || 0) - (Number(b.cvss) || 0)
+        );
+      case "title":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      default:
+        return list;
+    }
+  }
+
+  function bubbleFilter(kind, value) {
+    const s = `${kind}:${value}`;
+    state.search = s.toLowerCase();
+    getLMNT("searchInput").value = s;
+    refreshAppView();
+  }
+
+  function setFilterLine(count) {
+    const parts = [];
+    if (state.severity !== "All") parts.push(`Severity=${state.severity}`);
+    if (state.category !== "All") parts.push(`Category=${state.category}`);
+    if (state.search) parts.push(`Search="${state.search}"`);
+
+    const line = parts.length ? parts.join(" • ") : "All findings";
+    getLMNT("activeFilterLine").textContent = `Showing: ${line} (${count})`;
+  }
+
+  function renderFindings(list) {
+    const host = getLMNT("findingsList");
+    host.innerHTML = "";
+
+    if (!list.length) {
+      host.innerHTML = renderEmptyState();
+      return;
+    }
+
+    list.forEach((f, idx) => {
+      host.appendChild(buildFindingNode(f, idx));
+    });
+  }
+
+  function buildFindingNode(f, idx) {
+    const collapseId = buildCollapseId(f, idx);
+
+    const node = document.createElement("div");
+    node.className = "finding";
+    node.dataset.sev = f.severity;
+    node.dataset.cat = f.category;
+
+    node.innerHTML = `
+      ${renderFindingHeader(f, collapseId)}
+      ${renderFindingMetaRow(f)}
+      ${renderFindingCollapse(f, collapseId)}
+    `;
+
+    return node;
+  }
+
+  function renderFindingHeader(f, collapseId) {
+    return `
+      <div class="finding-head">
+        <div class="d-flex align-items-start gap-3 flex-wrap">
+          <span class="sev-pill ${escapeHtml(f.severity)}">
+            ${escapeHtml(f.severity)}
+          </span>
+
+          ${renderFindingFlags(f)}
+
+          <div>
+            <div class="finding-title">${escapeHtml(f.title)}</div>
+            <div class="finding-sub">
+              <span class="text-muted">Category:</span> ${escapeHtml(
+      f.category
+    )} •
+              <span class="text-muted">Status:</span> ${escapeHtml(f.status)} •
+              <span class="text-muted">Time:</span> ${escapeHtml(f.time)}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="cvss-pill" style="background:${cvssBg(f.cvss)};">
+            CVSS ${escapeHtml(f.cvss)}
+          </span>
+
+          <button class="btn btn-outline-light btn-sm"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#${collapseId}">
+            Details
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFindingFlags(f) {
+    return `
+      ${f.exploitAvailable
+        ? `<span class="meta-bubble primary">Exploit Available</span>`
+        : ""
+      }
+      ${f.internetExposed
+        ? `<span class="meta-bubble warning">Internet Exposed</span>`
+        : ""
+      }
+      ${f.privEscCandidate
+        ? `<span class="meta-bubble success">Priv Esc Path</span>`
+        : ""
+      }
+    `;
+  }
+
+  function renderFindingMetaRow(f) {
+    return `
+  <div class="meta-row">
+    <span class="meta-bubble"
+          onclick="setCategory('${escapeHtml(f.category)}')">
+      Category ${escapeHtml(f.category)}
+    </span>
+
+    ${renderMetaBubbles(f.mitre, "mitre", "MITRE")}
+    ${renderMetaBubbles(f.nistObjects || f.nist, "nist", "NIST")}
+    ${renderMetaBubbles(f.cwe, "cwe")}
+    ${renderMetaBubbles(f.cisObjects || f.cis, "cis", "CIS")}
+  </div>
+`;
+  }
+
+  function renderMetaBubbles(items = [], type, prefix = "") {
+    return items
+      .map((item) => {
+        const { id, url } = normalizeFrameworkItem(item);
+
+        const label = `${prefix ? prefix + " " : ""}${id}`;
+
+        const content = url
+          ? `<a href="${url}" target="_blank">${label}</a>`
+          : label;
+
+        return `
+      <span class="meta-bubble"
+        onclick="bubbleFilter('${type}','${id}')">
+        ${content}
+      </span>
+    `;
+      })
+      .join("");
+  }
+
+  function renderFindingCollapse(f, collapseId) {
+    return `
+      <div id="${collapseId}" class="collapse">
+        <div class="finding-body">
+          <div class="row g-3 mb-3">
+            ${renderFrameworkColumn("MITRE ATT&CK", f.mitreObjects || f.mitre)}
+            ${renderFrameworkColumn("CWE Weakness", f.cweObjects || f.cwe)}
+            ${renderFrameworkColumn("NIST Control", f.nistObjects || f.nist)}
+            ${renderFrameworkColumn("CIS Benchmark", f.cisObjects || f.cis)}
+          </div>
+
+<div class="row g-3">
+
+  <div class="col-lg-6">
+    <div class="label">Message</div>
+    <div class="box">
+      ${escapeHtml(f.message).replaceAll("\n", "<br>")}
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="label">Recommendation</div>
+    <div class="box">
+      ${escapeHtml(f.recommendation).replaceAll("\n", "<br>")}
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="label">Exploitation</div>
+    <div class="box">
+      ${escapeHtml(f.exploitation || "No exploitation notes.")
+        .replaceAll("\n", "<br>")}
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="label">Remediation</div>
+    <div class="box">
+      ${escapeHtml(f.remediation || "No remediation guidance.")
+        .replaceAll("\n", "<br>")}
+    </div>
+  </div>
+  <div class="col-12">
+    <div class="label">Evidence</div>
+    <div class="box">
+      ${f.evidence
+        ? marked.parse(f.evidence)
+        : `<span class="text-muted">No evidence provided.</span>`
+      }
+    </div>
+  </div>
+</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFrameworkColumn(title, items = []) {
+    const content =
+      items && items.length
+        ? items
+          .map((item) => {
+            const { id, name, url, tactic } = normalizeFrameworkItem(item);
+
+            return `
+            <div style="margin-bottom:12px;">
+              <div>
+                <strong>${escapeHtml(id)}</strong>
+                ${name ? ` - ${escapeHtml(name)}` : ""}
+              </div>
+
+              ${tactic
+                ? `<div class="text-muted" style="font-size:0.75rem;">
+                    Tactic: ${escapeHtml(tactic)}
+                  </div>`
+                : ""
+              }
+
+              ${url
+                ? `<div style="margin-top:4px;">
+                    <a href="${escapeHtml(url)}" target="_blank">
+                      View Details
+                    </a>
+                  </div>`
+                : ""
+              }
+            </div>
+          `;
+          })
+          .join("")
+        : `<span class="text-muted">None mapped.</span>`;
+
+    return `
+      <div class="col-lg-3">
+        <div class="label">${escapeHtml(title)}</div>
+        <div class="box">${content}</div>
+      </div>
+    `;
+  }
+
+  function buildCollapseId(f, idx) {
+    return `collapse_${idx}_${f.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  }
+
+  function renderEmptyState() {
+    return `
+    <div class="card p-3">
+      <div class="card-title">No results</div>
+      <div class="text-muted">
+        Try clearing filters or changing search terms.
+      </div>
+    </div>`;
+  }
+
+  function normalizeFrameworkItem(item) {
+    if (typeof item === "string") {
+      return { id: item };
+    }
+
+    return {
+      id:
+        item.id ||
+        item.Id ||
+        item.CweId ||
+        item.CisId ||
+        item.NistId ||
+        item.TacticId ||
+        item.TechniqueId ||
+        item.ControlId ||
+        "",
+
+      name:
+        item.name ||
+        item.Name ||
+        "",
+
+      url:
+        item.url ||
+        item.Url ||
+        "",
+
+      tactic:
+        item.tactic ||
+        item.Tactic ||
+        ""
+    };
+  }
+
+  function openEvidence(findingId) {
+
+    const finding = getFindings().find(f => f.id === findingId);
+
+    if (!finding) {
+      showToast("Finding not found.", "error");
+      return;
+    }
+
+    const evidence = finding.evidence || "_No evidence provided._";
+
+    getLMNT("evidenceModalTitle").textContent =
+      "Evidence - " + finding.title;
+
+    getLMNT("evidenceModalBody").innerHTML =
+      marked.parse(evidence);
+
+    new bootstrap.Modal(getLMNT("evidenceModal")).show();
+  }
+
+  function resetFindingOverride(findingId) {
+    if (PATCH.findingOverrides) delete PATCH.findingOverrides[findingId];
+    PatchStore.save(PATCH);
+    showToast("Finding override reset.", "info");
+
+    refreshAppView();
+  }
+
+  function copyFindingOverrideJson(findingId) {
+    const o =
+      (PATCH.findingOverrides && PATCH.findingOverrides[findingId]) || {};
+    navigator.clipboard.writeText(JSON.stringify(o, null, 2));
+    showToast("Override JSON copied to clipboard.", "success");
+  }
+
+  function buildFindingStats() {
+    const eff = EFFECTIVE_FINDINGS;
+
+    FINDING_STATS = {
+      severity: countMap(eff, "severity"),
+      category: countMap(eff, "category"),
+      mitre: collectFramework(eff, "mitre"),
+      cwe: collectFramework(eff, "cwe"),
+      nist: collectFramework(eff, "nist"),
+      cis: collectFramework(eff, "cis"),
+    };
+  }
+
+  function rebuildEffectiveFindings() {
+    const overrides = PATCH.findingOverrides || {};
+    const custom = PATCH.customFindings || [];
+
+    const base = FINDINGS.map((f) => {
+      const o = overrides[f.id];
+      return o ? { ...f, ...o } : f;
+    });
+
+    const customWithOverrides = custom.map((f) => {
+      const o = overrides[f.id];
+      return o ? { ...f, ...o } : f;
+    });
+
+    EFFECTIVE_FINDINGS = [...base, ...customWithOverrides];
+
+    buildFindingStats();
+  }
+
+  function getFindings() {
+    return EFFECTIVE_FINDINGS;
+  }
+
+  /* =========================================================
+  SECTION 8b - CIS AUDIT PAGE
+  ========================================================= */
+  function buildCISEvidenceHtml(evidenceStr) {
+    if (!evidenceStr) return "";
+
+    const lines = evidenceStr.split("\n");
+    const meta  = [];
+    const rules = [];
+    let inRules     = false;
+    let currentRule = null;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (line.startsWith("--- Rule Evaluation Output ---")) {
+        inRules = true;
+        if (currentRule) { rules.push(currentRule); currentRule = null; }
+        continue;
+      }
+
+      if (!inRules) {
+        meta.push(line);
+        continue;
+      }
+
+      // New rule result line: [FAIL] Raw : ... or [PASS] Equals : ...
+      const ruleM = line.match(/^\[(FAIL|PASS)\]\s+(\S+)\s*:\s*(.*)$/i);
+      if (ruleM) {
+        if (currentRule) rules.push(currentRule);
+        const status = ruleM[1].toLowerCase();
+        const type   = ruleM[2];
+        const rest   = ruleM[3];
+        const cmdM   = rest.match(/cmd=\[([^\]]*)\]/);
+        const testM  = rest.match(/test=\[([^\]]*)\]/);
+        currentRule = {
+          status,
+          type,
+          raw:    cmdM  ? null : rest,   // registry-style: show as raw
+          cmd:    cmdM  ? cmdM[1]  : null,
+          test:   testM ? testM[1] : null,
+          output: null,
+        };
+        continue;
+      }
+
+      // Continuation lines from Raw rule summary:
+      //   "           test=[...]"  or  "           output=[...]"
+      if (currentRule) {
+        const testContM = line.match(/^test=\[([^\]]*)\]$/);
+        if (testContM) { currentRule.test = testContM[1]; continue; }
+
+        const outContM = line.match(/^output=\[([^\]]*)\]?$/);
+        if (outContM) { currentRule.output = outContM[1]; continue; }
+
+        // bare output=value (no brackets)
+        const outBareM = line.match(/^output=(.+)$/);
+        if (outBareM) { currentRule.output = outBareM[1]; continue; }
+      }
+    }
+
+    if (currentRule) rules.push(currentRule);
+
+    // Build HTML
+    const metaHtml = meta.length
+      ? `<div class="cis-evidence-meta">${meta.map(escapeHtml).join("<br>")}</div>`
+      : "";
+
+    const rulesHtml = rules.map(r => {
+      const statusCls = r.status === "fail" ? "fail" : "pass";
+      let detail = "";
+      if (r.cmd) {
+        detail += `<div class="cis-rule-cmd">&#x25B6; ${escapeHtml(r.cmd)}</div>`;
+        if (r.test) detail += `<div class="cis-rule-output">Pattern : ${escapeHtml(r.test)}</div>`;
+      } else if (r.raw) {
+        detail += `<div class="cis-rule-output">${escapeHtml(r.raw)}</div>`;
+      }
+      if (r.output) {
+        detail += `<div class="cis-rule-output" style="opacity:0.7">Output  : ${escapeHtml(r.output)}</div>`;
+      }
+      return `
+        <div class="cis-rule-entry ${statusCls}">
+          <span class="cis-rule-badge ${statusCls}">${r.status.toUpperCase()}</span>
+          <span class="cis-rule-type">${escapeHtml(r.type)}</span>
+          ${detail}
+        </div>`;
+    }).join("");
+
+    if (!metaHtml && !rulesHtml) return "";
+
+    return `<div class="cis-evidence-block">${metaHtml}${rulesHtml}</div>`;
+  }
+
+  function renderCISAudit() {
+    const hasCIS = CIS_AUDIT && CIS_AUDIT.Total > 0;
+
+    getLMNT("cisAuditNoData").style.display    = hasCIS ? "none"  : "";
+    getLMNT("cisAuditContent").style.display   = hasCIS ? ""      : "none";
+
+    if (!hasCIS) return;
+
+    const total  = CIS_AUDIT.Total  || 0;
+    const passed = CIS_AUDIT.Passed || 0;
+    const failed = CIS_AUDIT.Failed || 0;
+    const rate   = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+    getLMNT("cisStatTotal").textContent  = total;
+    getLMNT("cisStatPassed").textContent = passed;
+    getLMNT("cisStatFailed").textContent = failed;
+    getLMNT("cisStatRate").textContent   = rate + "%";
+
+    if (CIS_AUDIT.Policy) getLMNT("cisAuditChartTitle").textContent = CIS_AUDIT.Policy;
+
+    const textColor = getComputedStyle(document.documentElement)
+      .getPropertyValue("--text-primary").trim();
+
+    const ctx = getLMNT("chartCISAudit");
+    if (chartCISAudit) chartCISAudit.destroy();
+
+    chartCISAudit = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: [CIS_AUDIT.Benchmark || "CIS Benchmark"],
+        datasets: [
+          { label: `Passed (${passed})`, data: [passed], backgroundColor: "#34d399" },
+          { label: `Failed (${failed})`, data: [failed], backgroundColor: "#ef4444" },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: { legend: { position: "bottom" } },
+        scales: {
+          x: { stacked: true, max: total, ticks: { color: textColor } },
+          y: { stacked: true, ticks: { color: textColor } },
+        },
+      },
+    });
+
+    // Render failed checks
+    const cisFails = getFindings().filter(f => f.category === "CIS Benchmark");
+    getLMNT("cisAuditFailCount").textContent = cisFails.length;
+
+    const list = getLMNT("cisAuditList");
+    list.innerHTML = "";
+
+    if (cisFails.length === 0) {
+      list.innerHTML = '<p class="text-muted">No failed checks recorded.</p>';
+      return;
+    }
+
+    cisFails.forEach((f, idx) => {
+      const node = document.createElement("div");
+      node.className = "finding mb-3";
+
+      const cisIds = (f.cis || [])
+        .map(x => typeof x === "string" ? x : (x.id || ""))
+        .filter(Boolean).join(" · ");
+
+      const colId = "cis-ev-" + idx;
+
+      // Parse evidence into structured blocks
+      const evidenceHtml = buildCISEvidenceHtml(f.evidence || "");
+
+      node.innerHTML = `
+        <div class="finding-head" data-bs-toggle="collapse" data-bs-target="#${colId}" style="cursor:pointer;padding-bottom:6px">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="sev-pill ${escapeHtml(f.severity||"Info")}">${escapeHtml(f.severity||"Info")}</span>
+            <span class="finding-title">${escapeHtml(f.title)}</span>
+            ${cisIds ? `<span class="meta-bubble ms-auto">${escapeHtml(cisIds)}</span>` : ""}
+          </div>
+        </div>
+        <div class="collapse" id="${colId}">
+          <div class="pt-1 pb-1">
+            ${f.message ? `<p class="text-muted small mb-2">${escapeHtml(f.message)}</p>` : ""}
+            ${f.remediation ? `<div class="mb-3" style="border-left:3px solid var(--accent);padding:6px 10px;background:rgba(239,68,68,0.06);border-radius:0 6px 6px 0"><div style="color:var(--accent);font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px">Remediation</div><div style="font-size:0.83rem;color:var(--text-primary);line-height:1.5">${escapeHtml(f.remediation)}</div></div>` : ""}
+            ${evidenceHtml}
+          </div>
+        </div>
+      `;
+      list.appendChild(node);
+    });
+  }
+
+  /* =========================================================
+  SECTION 9 - CHARTS
+  ========================================================= */
+  function buildCharts() {
+    const eff = getFindings();
+    const sevMap = countBy("severity");
+    const catMap = countBy("category");
+    const mitreMap = collectFramework(eff, "mitre");
+    const cweMap = collectFramework(eff, "cwe");
+    const nistMap = collectFramework(eff, "nist");
+    const cisMap = collectFramework(eff, "cis");
+
+    const sevLabels = ["Critical", "High", "Medium", "Low", "Info"];
+    const sevData = sevLabels.map((s) => sevMap.get(s) || 0);
+
+    const catLabels = Array.from(catMap.keys());
+    const catData = catLabels.map((k) => catMap.get(k));
+
+    const mitreTop = Array.from(mitreMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
+
+    const mitreLabels = mitreTop.map((x) => x.id);
+    const mitreData = mitreTop.map((x) => x.count);
+
+    const cweTop = Array.from(cweMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
+
+    const cweLabels = cweTop.map((x) => x.id);
+    const cweData = cweTop.map((x) => x.count);
+
+    const nistTop = Array.from(nistMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
+
+    const nistLabels = nistTop.map((x) => x.id);
+    const nistData = nistTop.map((x) => x.count);
+
+    const cisTop = Array.from(cisMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
+
+    const cisLabels = cisTop.map(x => x.id);
+    const cisData = cisTop.map(x => x.count);
+
+    const ctxS = getLMNT("chartSeverity");
+    const ctxC = getLMNT("chartCategory");
+    const ctxM = getLMNT("chartMitre");
+    const ctxW = getLMNT("chartCwe");
+    const ctxN = getLMNT("chartNist");
+    const ctxCIS = getLMNT("chartCis");
+
+    if (chartSeverity) chartSeverity.destroy();
+    if (chartCategory) chartCategory.destroy();
+    if (chartMitre) chartMitre.destroy();
+    if (chartCwe) chartCwe.destroy();
+    if (chartNist) chartNist.destroy();
+    if (chartCis) chartCis.destroy();
+
+    const textColor = getComputedStyle(document.documentElement)
+      .getPropertyValue("--text-primary")
+      .trim();
+
+    chartSeverity = new Chart(ctxS, {
+      type: "doughnut",
+      data: {
+        labels: sevLabels,
+        datasets: [
+          {
+            data: sevData,
+            backgroundColor: sevLabels.map((s) => SEVERITY_COLORS[s]),
+          },
+        ],
+      },
+      options: {
+        cutout: "65%",
+        plugins: {
+          legend: {
+            position: "left",
+          },
+        },
+      },
+    });
+
+    chartCategory = new Chart(ctxC, {
+      type: "pie",
+      data: {
+        labels: catLabels,
+        datasets: [
+          {
+            data: catData,
+            backgroundColor: catLabels.map(
+              (_, i) => `hsl(${(i * 47) % 360}, 70%, 55%)`
+            ),
+          },
+        ],
+      },
+      options: {
+        cutout: "65%",
+        plugins: {
+          legend: {
+            position: "left",
+          },
+        },
+      },
+    });
+
+    const cisTotal  = (CIS_AUDIT && CIS_AUDIT.Total)  || 0;
+    const cisPassed = (CIS_AUDIT && CIS_AUDIT.Passed) || 0;
+    const cisFailed = (CIS_AUDIT && CIS_AUDIT.Failed) || 0;
+
+    chartCis = new Chart(ctxCIS, {
+      type: "bar",
+      data: {
+        labels: [(CIS_AUDIT && CIS_AUDIT.Benchmark) || "CIS Benchmark"],
+        datasets: [
+          { label: "Passed", data: [cisPassed], backgroundColor: "#34d399" },
+          { label: "Failed", data: [cisFailed], backgroundColor: "#ef4444" },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        plugins: { legend: { position: "bottom" } },
+        scales: {
+          x: { stacked: true, ticks: { color: textColor } },
+          y: { stacked: true, ticks: { color: textColor } },
+        },
+      },
+    });
+
+    chartMitre = new Chart(ctxM, {
+      type: "bar",
+      data: {
+        labels: mitreLabels,
+        datasets: [
+          {
+            label: "Findings",
+            data: mitreData,
+            backgroundColor: SEVERITY_COLORS["Critical"],
+          },
+        ],
+      },
+      options: {
+        scales: {
+          x: { ticks: { color: textColor } },
+          y: { ticks: { color: textColor } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    chartCwe = new Chart(ctxW, {
+      type: "bar",
+      data: {
+        labels: cweLabels,
+        datasets: [
+          {
+            label: "Findings",
+            data: cweData,
+            backgroundColor: SEVERITY_COLORS["Medium"],
+          },
+        ],
+      },
+      options: {
+        scales: {
+          x: { ticks: { color: textColor } },
+          y: { ticks: { color: textColor } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    chartNist = new Chart(ctxN, {
+      type: "bar",
+      data: {
+        labels: nistLabels,
+        datasets: [
+          {
+            label: "Findings",
+            data: nistData,
+            backgroundColor: SEVERITY_COLORS["Info"],
+          },
+        ],
+      },
+      options: {
+        scales: {
+          x: { ticks: { color: textColor } },
+          y: { ticks: { color: textColor } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+
+  function getFrameworkItems(f, type) {
+    const arr =
+      f[`${type}Objects`] && f[`${type}Objects`].length
+        ? f[`${type}Objects`]
+        : f[type] || [];
+
+    return normalizeFrameworkArray(arr);
+  }
+
+  function collectFramework(eff, field) {
+    const map = new Map();
+    for (const f of eff) {
+      const items = normalizeFrameworkArray(
+        f[`${field}Objects`] && f[`${field}Objects`].length
+          ? f[`${field}Objects`]
+          : f[field] || []
+      );
+
+      for (const item of items) {
+        const id = item.id;
+        if (!id) continue;
+
+        if (!map.has(id)) map.set(id, { ...item, count: 0 });
+
+        map.get(id).count++;
+      }
+    }
+
+    return map;
+  }
+
+  function countBy(key) {
+    const m = new Map();
+    const eff = getFindings();
+    for (const f of eff) {
+      const v = f[key] || "Unknown";
+      m.set(v, (m.get(v) || 0) + 1);
+    }
+    return m;
+  }
+
+  /* =========================================================
+  SECTION 8 - FRAMEWORK OVERLAYS
+  ========================================================= */
+  function openFrameworkOverlay({
+    title,
+    description,
+    items,
+    groupBy,
+    linkText,
+    filterFn,
+  }) {
+    let html = `
+      <div class="mb-3 text-muted">${escapeHtml(description)}</div>
+    `;
+
+    if (!items.length) {
+      html += `<div class="box">No data present.</div>`;
+    }
+
+    window.filterByFrameworkHandler = (id) => {
+      filterFn(id);
+    };
+
+    const groups = groupBy
+      ? items.reduce((acc, it) => {
+        const key = it[groupBy] || "Unknown";
+        (acc[key] ||= []).push(it);
+        return acc;
+      }, {})
+      : { All: items };
+
+    for (const group of Object.keys(groups).sort()) {
+      const arr = groups[group].sort((a, b) => b.count - a.count);
+
+      if (groupBy) {
+        html += `
+          <div class="mb-4">
+            <div style="font-weight:600;margin-bottom:8px;color:var(--accent);">
+              ${escapeHtml(group)}
+            </div>
+            <div class="d-flex flex-column gap-2">
+        `;
+      } else {
+        html += `<div class="d-flex flex-column gap-2">`;
+      }
+
+      for (const item of arr) {
+        html += `
+          <div class="box d-flex justify-content-between align-items-center">
+            <div>
+              <div>
+                <strong>${escapeHtml(item.id)}</strong>
+                ${item.name ? ` - ${escapeHtml(item.name)}` : ""}
+              </div>
+              ${item.url
+            ? `
+                <div style="font-size:0.8rem;">
+                  <a href="${escapeHtml(item.url)}" target="_blank">
+                    ${linkText}
+                  </a>
+                </div>`
+            : ""
+          }
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <span class="count-pill">${item.count}</span>
+                <button class="btn btn-outline-light btn-sm"
+                  onclick="filterByFrameworkHandler('${escapeHtml(item.id)}')">
+                  Filter
+                </button>
+            </div>
+          </div>
+        `;
+      }
+
+      html += `</div>`;
+      if (groupBy) html += `</div>`;
+    }
+
+    setModalTitle(title);
+    getLMNT("mitreBody").innerHTML = html;
+    new bootstrap.Modal(getLMNT("mitreModal")).show();
+  }
+
+  function filterByFramework(prefix, id) {
+    const modal = bootstrap.Modal.getInstance(getLMNT("mitreModal"));
+    if (modal) modal.hide();
+
+    const s = prefix ? `${prefix}:${id}` : id;
+
+    state.search = s.toLowerCase();
+    getLMNT("searchInput").value = s;
+
+    setPage("findings");
+    refreshAppView();
+  }
+
+  function normalizeFrameworkArray(arr) {
+
+    if (!arr) return [];
+
+    if (!Array.isArray(arr)) {
+      arr = [arr];
+    }
+
+    return arr.map((x) =>
+      typeof x === "string"
+        ? { id: x }
+        : {
+          id: x.id || x.Id || "",
+          name: x.name || x.Name || "",
+          url: x.url || x.Url || "",
+          tactic: x.tactic || x.Tactic || "",
+        }
+    ).filter((x) => x.id);
+  }
+
+  function openMitreOverlay() {
+    const items = Array.from(
+      collectFramework(getFindings(), "mitre").values()
+    );
+
+    openFrameworkOverlay({
+      title: "MITRE Overlay",
+      description: "MITRE ATT&CK Techniques grouped by Tactic.",
+      items,
+      groupBy: "tactic",
+      linkText: "View on MITRE ATT&CK",
+      filterFn: (id) => filterByFramework("", id),
+    });
+  }
+
+  function openNistOverlay() {
+    const items = Array.from(
+      collectFramework(getFindings(), "nist").values()
+    );
+
+    openFrameworkOverlay({
+      title: "NIST Overlay",
+      description: "NIST controls found across current export.",
+      items,
+      groupBy: null,
+      linkText: "View NIST Control",
+      filterFn: (id) => filterByFramework("nist", id),
+    });
+  }
+
+  function openCweOverlay() {
+    const items = Array.from(collectFramework(getFindings(), "cwe").values());
+
+    openFrameworkOverlay({
+      title: "CWE Overlay",
+      description: "CWE weaknesses found across current export.",
+      items,
+      groupBy: null,
+      linkText: "View CWE Details",
+      filterFn: (id) => filterByFramework("cwe", id),
+    });
+  }
+
+  function openCisOverlay() {
+
+    const items = Array.from(
+      collectFramework(getFindings(), "cis").values()
+    );
+
+    openFrameworkOverlay({
+      title: "CIS Benchmark Overlay",
+      description: "CIS Controls mapped to findings.",
+      items,
+      groupBy: null,
+      linkText: "View CIS Control",
+      filterFn: (id) => filterByFramework("cis", id)
+    });
+
+  }
+
+
+  /* =========================================================
+  SECTION 10 - INIT
+  ========================================================= */
+  function init() {
+    rebuildEffectiveFindings();
+    refreshAppView();
+    buildCharts();
+
+    setActiveNav("severity", "sev", "All");
+    setActiveNav("category", "cat", "All");
+    setActivePageNav("overview");
+
+    new MutationObserver(buildCharts).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
+
+  init();
+</script>
+
+</html>

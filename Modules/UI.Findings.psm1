@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 function fncShowFindings {
 
-    $findings = fncSafeArray $global:ProberState.Findings
+    $findings = fncSafeArray $global:ProberState.Findings.Values
 
     if ((fncSafeCount $findings) -eq 0) {
         fncSafePrintMessage "No findings recorded." "warning"
@@ -53,31 +53,12 @@ function fncShowFindings {
 }
 
 function fncExportFindings {
-
-    $rows = fncSafeArray $global:ProberState.Findings
-
-    if ((fncSafeCount $rows) -eq 0) {
-        fncSafePrintMessage "No findings to export." "warning"
-        fncSafePause
-        return
+    # Delegate to the full CSV exporter in Export.psm1
+    if (fncCommandExists "fncExportFindingsToCsv") {
+        fncExportFindingsToCsv
     }
-
-    try {
-
-        $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-        $Path = Join-Path $PWD ("Prober_Findings_{0}.csv" -f $timestamp)
-
-        $rows |
-            Select-Object Id,Category,Title,Severity,Status,Message,Recommendation,Timestamp |
-            Export-Csv -Path $Path -NoTypeInformation -Encoding UTF8
-
-        fncSafePrintMessage ("Exported findings to: {0}" -f $Path) "success"
-
-        try { fncLog "INFO" ("Exported findings to CSV: {0} (count: {1})" -f $Path, (fncSafeCount $rows)) } catch {}
-
-    }
-    catch {
-        fncSafePrintMessage ("Export failed: {0}" -f $_.Exception.Message) "error"
+    else {
+        fncSafePrintMessage "Export module not loaded." "warning"
     }
 
     fncSafePause
@@ -89,13 +70,12 @@ function fncShowFindingsMenu {
 
         fncSafeRenderHeader
         fncSafeSectionHeader "Findings"
-        fncSafeDivider
-
         fncSafeMenuOption "1" "View Findings"
         Write-Host ""
-        fncSafeMenuOption "2" "Export Findings to CSV"
-
-        fncSafeMenuOption "3" "Export Findings to JSON (coming soon)"
+        fncSafeMenuOption "2" "Export to CSV"
+        fncSafeMenuOption "3" "Export to HTML"
+        fncSafeMenuOption "4" "Export to JSON"
+        Write-Host ""
         fncSafeMenuOption "B" "Main Menu"
         fncSafeMenuOption "Q" "Quit"
 
@@ -108,8 +88,37 @@ function fncShowFindingsMenu {
         switch ($choice.ToUpper()) {
 
             "1" { fncShowFindings }
-            "2" { fncExportFindings }
-            "3" { fncSafePrintMessage "JSON export coming soon!" "info" }
+
+            "2" {
+                if (fncCommandExists "fncExportFindingsToCsv") {
+                    fncExportFindingsToCsv
+                }
+                else {
+                    fncSafePrintMessage "Export module not loaded." "warning"
+                }
+                fncSafePause
+            }
+
+            "3" {
+                if (fncCommandExists "fncExportFindingsToHtml") {
+                    fncExportFindingsToHtml
+                }
+                else {
+                    fncSafePrintMessage "Export module not loaded." "warning"
+                }
+                fncSafePause
+            }
+
+            "4" {
+                if (fncCommandExists "fncExportFindingsToJson") {
+                    fncExportFindingsToJson
+                }
+                else {
+                    fncSafePrintMessage "Export module not loaded." "warning"
+                }
+                fncSafePause
+            }
+
             "B" { return }
             "Q" { return }
         }

@@ -1,363 +1,215 @@
+<img width="444" height="229" alt="image" src="https://github.com/user-attachments/assets/729927c3-aeb8-46d1-9708-11093b294e1e" />
+
 # THE Pr0b3r
 
-![Logo](images/logo.png)
-
-> Modular Windows security enumeration for people who actually use their tools.
-
----
-
-# What Is This?
-
-**THE Pr0b3r** is a modular Windows security assessment framework built around:
-
-* A structured **test registry**
-* Operator-first console output
-* Clean, deduplicated findings
-* Mapping-aware reporting (MITRE / CWE / NIST)
-
-It’s not a “run everything and dump chaos” script.
-
-It’s a framework.
+A PowerShell-based security assessment framework for Windows environments.
+Run defensive control-validation checks, collect structured findings, and export results to CSV, JSON, or a self-contained HTML report.
 
 ---
 
-# Version 2 Architecture
+## Overview
 
-The new framework introduces:
+THE Pr0b3r is a menu-driven security assessment tool built entirely on PowerShell 5.1.
+It discovers test plugins automatically from the filesystem, executes them against the local host, and stores every result as a structured finding that can be filtered, reviewed, and exported.
 
-* 🔎 Dynamic test discovery
-* 🧱 Structured `test.json` schema
-* 🗂 Category objects with Primary + Subcategories
-* 🧠 Built-in MITRE / CWE / NIST mapping support
-* 📊 Deterministic finding IDs
-* 🔌 Drop-in plugin model
-* 🧪 Single-responsibility tests
+**Modes**
 
-Each test is standalone, structured, and predictable.
+| Mode | Flag | Purpose |
+|------|------|---------|
+| Blue (defensive) | `-Strategy blue` | Security control validation - verify that hardening controls are in place |
+| Red (offensive) | `-Strategy red` | Attack surface enumeration (not included in public release) |
 
----
-
-# Design Philosophy
-
-* StrictMode safe
-* Fail gracefully
-* No silent crashes
-* Findings > raw output
-* Operator clarity > noise
-* Prevention ≠ detection
-* Audit mode ≠ enforcement
+The public release ships with **defensive (blue) tests only.**
 
 ---
 
-# Framework Overview
+## Requirements
 
-## 🔍 Test Discovery
+- Windows PowerShell 5.1 or later
+- Windows 10 / Windows Server 2016 or later
+- Some tests require a local Administrator session (`RequiresAdmin: true` in their manifest)
 
-Tests are automatically discovered from disk:
-
-```
-Tests/<Scope>/<Category-TestName>/
-├── test.json
-├── test.ps1  OR  test.psm1
-```
-
-Drop the folder in.
-It registers automatically.
-
-No central registry file to edit.
+No external dependencies. No internet connection required at runtime.
 
 ---
 
-## 🧩 JSON Test Structure
-
-Every test must include a `test.json` file.
-
-Example:
-
-```json
-{
-  "SchemaVersion": 5,
-  "Id": "DEMO-WEAK-SERVICE-PERMISSIONS",
-  "Name": "Demo Weak Service Permission Check",
-  "Function": "fncDemoTestTemplate",
-
-  "Category": {
-    "Primary": "Privilege Escalation",
-    "Subcategories": [
-      "Service Misconfiguration",
-      "Access Control Weakness"
-    ]
-  },
-
-  "Scopes": ["Workstation", "Server"],
-  "RequiresAdmin": false,
-  "Enabled": true,
-
-  "Description": "Checks for services where non-admin users may modify configuration.",
-
-  "Mappings": {
-    "MitreAttack": [...],
-    "CWE": [...],
-    "Nist": [...]
-  }
-}
-```
-
----
-
-## Required Fields
-
-* `SchemaVersion`
-* `Id`
-* `Name`
-* `Function`
-* `Category.Primary`
-* `Scopes`
-
----
-
-## Optional (But Strongly Recommended)
-
-* `Subcategories`
-* `Description`
-* `Mappings` (MITRE / CWE / NIST)
-* `RequiresAdmin`
-* `Enabled`
-
----
-
-# Scopes
-
-Scopes control menu visibility.
-
-| Scope       | Purpose                         |
-| ----------- | ------------------------------- |
-| Workstation | Endpoint baseline / local abuse |
-| Server      | Service exposure / config risk  |
-| Domain      | AD / delegation / Kerberos      |
-| DMZ         | Boundary / externally exposed   |
-| All         | Always eligible                 |
-
-`All` simply means “visible everywhere”.
-
----
-
-# Findings Framework
-
-All tests write to a central findings object.
-
-Standard structure:
-
-* `TestId`
-* `Id`
-* `Category`
-* `Title`
-* `Severity`
-* `Status`
-* `Message`
-* `Recommendation`
-* `Exploitation`
-* `Remediation`
-* `Timestamp`
-
----
-
-## Severity Levels
-
-* `Info`
-* `Low`
-* `Medium`
-* `High`
-* `Critical`
-
-Severity must reflect:
-
-* Exploitability
-* Privilege context
-* Impact
-* Ease of abuse
-
----
-
-## Deterministic Finding IDs
-
-Use fingerprint-based hashing:
+## Quick Start
 
 ```powershell
-$fingerprint = "$ServiceName|$Path|$Context"
-$tag = fncShortHashTag $fingerprint
+# Run with default settings (defensive mode, no console output)
+.\thePr0b3r.ps1
 
-fncAddFinding -Id ("PRIVESC_SVC_$tag") ...
-```
+# Run in blue (defensive) mode with info-level console output
+.\thePr0b3r.ps1 -Strategy blue -logger info
 
-Benefits:
+# Verbose debug output
+.\thePr0b3r.ps1 -Strategy blue -logger debug
 
-* Stable across runs
-* Deduplicated
-* Not unreadable GUID spam
+# Show help
+.\thePr0b3r.ps1 -ShowHelp
 
----
-
-# Console Output Standards
-
-Every test should:
-
-1. Print a section header
-2. Print what it is checking
-3. Print intermediate states
-4. Print result summary
-
-Use:
-
-* `fncPrintSectionHeader`
-* `fncPrintMessage`
-* `fncAddFinding`
-
-Console output is for operators.
-Findings are for reporting.
-
-They are not the same thing.
-
----
-
-# Writing Tests (Schema V5 Style)
-
-## 1️⃣ Create Folder
-
-```
-Tests/Workstation/Privilege Escalation-Weak Service Permissions/
-```
-
-Recommended naming:
-
-```
-<Category>-<TestName>
+# Show version
+.\thePr0b3r.ps1 -ShowVersion
 ```
 
 ---
 
-## 2️⃣ Add `test.json`
+## Parameters
 
-Must match function name in script.
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `-Strategy` | `red`, `blue` | `red` | Assessment strategy |
+| `-logger` | `silent`, `info`, `debug` | `silent` | Console verbosity level |
+| `-ShowHelp` | switch | - | Print usage and exit |
+| `-ShowVersion` | switch | - | Print version and exit |
 
 ---
 
-## 3️⃣ Add `test.psm1`
+## Main Menu
 
-Structure:
+```
+=========== TEST EXECUTION ===========
+  [1]  Run Tests (Environment: <detected>)
+  [2]  Run Tests (Select Environment)
+  [3]  Search Test
+  [4]  Browse All Categories
+  [A]  Run All Tests
 
-```powershell
-function fncExampleTest {
+=============== RESULTS ===============
+  [5]  View Findings
+  [6]  Export Findings to CSV
+  [7]  Export Findings to HTML
+  [8]  Export Findings to JSON
 
-    fncPrintSectionHeader "Example Test"
-    fncPrintMessage "Checking example condition..." "info"
+================ MODULES ==============
+  [AD] Active Directory Console
 
-    $testId = "EXAMPLE-TEST-ID"
+  [R]  Reload Test Modules
+  [Q]  Quit
+```
 
-    # Logic here...
+### Environment Scopes
 
-    fncAddFinding `
-        -TestId $testId `
-        -Id "EXAMPLE_FINDING_1" `
-        -Category "Example Category" `
-        -Title "Example Finding" `
-        -Severity "High" `
-        -Status "Detected" `
-        -Message "Condition detected." `
-        -Recommendation "Fix it properly." `
-        -Exploitation "Explain realistic abuse path." `
-        -Remediation "Explain exact remediation steps."
-}
+When running tests you can target a specific environment scope to limit which tests are presented:
 
-Export-ModuleMember -Function fncExampleTest
+| Scope | Description |
+|-------|-------------|
+| `Workstation` | Endpoint / desktop systems |
+| `Server` | Member servers |
+| `Domain` | Domain controllers and AD infrastructure |
+| `All` | All tests regardless of scope |
+
+---
+
+## Test Discovery
+
+Tests are loaded automatically at startup. The framework walks the `Tests\` directory tree looking for `test.json` manifest files. No registration or configuration is required - drop a valid test folder in and it will be picked up on the next run (or via **[R] Reload Test Modules**).
+
+```
+Tests\
+  Defensive\
+    Windows\
+      CredentialProtection\
+        CREDENTIAL-GUARD-CHECK\
+          test.json
+          test.psm1
+      LoggingMonitoring\
+        COMMANDLINE-LOGGING-CHECK\
+          test.json
+          test.psm1
+```
+
+Strategy (`Offensive` / `Defensive`) and OS (`Windows` / `Linux`) are inferred from folder position and can be overridden in `test.json`.
+
+---
+
+## Findings
+
+Every test reports its results by calling `fncSubmitFinding`. Findings are stored in memory for the duration of the session and keyed by `Id:Hostname` to prevent duplicates across repeated runs.
+
+**Severity levels:** `Critical` | `High` | `Medium` | `Low` | `Info`
+
+Findings can be reviewed from the menu (**[5] View Findings**) and filtered by severity, or exported in bulk.
+
+---
+
+## Exports
+
+All exports are written to:
+
+```
+exports\<HOSTNAME>-<RunId>\
+```
+
+inside the framework root directory. All three formats from a single session land in the same subfolder.
+
+| Format | Filename | Contents |
+|--------|----------|---------|
+| CSV | `Findings_<timestamp>.csv` | Flat spreadsheet, one row per finding |
+| JSON | `Findings_<timestamp>.json` | Structured document with run context and mappings |
+| HTML | `ThePr0b3r_Report_<timestamp>.html` | Self-contained interactive report |
+
+The HTML report is fully self-contained - no external assets, no internet required to open.
+
+---
+
+## Logging
+
+Log files are written to:
+
+```
+Logs\<RunId>\thePr0b3r.log
+```
+
+Each run gets its own directory keyed by its unique run ID.
+
+---
+
+## Directory Structure
+
+```
+thePr0b3r.ps1          Entry point / runner
+Modules\               Core framework modules
+  Core.psm1
+  Findings.psm1
+  Export.psm1
+  Registry.psm1
+  Logging.psm1
+  Output.psm1
+  UI.*.psm1
+  Menu.psm1
+  Integrations.AD.psm1  (optional)
+Tests\                 Test plugins (filesystem-discovered)
+  Defensive\
+    Windows\
+    Linux\
+  Offensive\            (not included in public release)
+data\                  HTML report template
+  ThePr0b3r_full.html
+exports\               Export output (created at runtime)
+Logs\                  Run logs (created at runtime)
 ```
 
 ---
 
-# AD Test Notes
+## Writing Your Own Tests
 
-Expect:
-
-* No RSAT
-* No Kerberos
-* No domain join
-* Partial connectivity
-
-Use:
-
-* `fncEnsureADAuth`
-* `fncEnsureKerberos`
-* `fncADQuery`
-
-Fail gracefully.
-Create useful findings instead of crashing.
+See [TEST_AUTHORING.md](TEST_AUTHORING.md) for a complete guide to creating custom test plugins, including the full `test.json` schema, the `test.psm1` structure, available helper functions, and a worked example.
 
 ---
 
-# Debugging
+## Optional Integrations
 
-Enable debug:
+| Module | Purpose | Status |
+|--------|---------|--------|
+| `Integrations.AD.psm1` | Active Directory enumeration console | Included |
+| `Integrations.NIST.psm1` | NIST SP 800-53 control enrichment | Included |
+| `Integrations.KEV.psm1` | CISA Known Exploited Vulnerabilities feed | Included |
 
-```powershell
-$global:config.DEBUG = $true
-```
-
-Message levels:
-
-* success
-* info
-* warning
-* error
-* debug
+Optional modules are loaded if present and silently skipped if not found.
 
 ---
 
-# What This Is Not
+## Version
 
-* Not a scanner
-* Not an EDR
-* Not a “press button get DA” script **(Yet!)**
-
-It’s a structured operator framework.
-
----
-
-# Requirements
-
-* Windows PowerShell 5.1+
-* PowerShell 7 supported
-* Some tests require admin
-
-Optional dependencies should never break the framework.
-
----
-
-# Legal
-
-Only run this where you are authorised.
-
-Be professional not a douche'.
-
----
-
-# Project
-
-THE Pr0b3r
-Built by Dean
-
-Repo:
-[https://github.com/deannreid/ThePr0b3r](https://github.com/deannreid/ThePr0b3r)
-
----
-
-## 📸 Screenshots
-
-![Start Page](images/startpage.png)
-
----
-
-![Test Viewer](images/test-viewer.png)
-
-![Finding Viewer](images/finding-viewer.png)
-
----
+**4.0.0**

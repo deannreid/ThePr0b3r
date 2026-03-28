@@ -5,260 +5,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function fncNotifyTestModuleLoaded {
-
-    param(
-        [Parameter(Mandatory)][psobject]$TestMeta,
-        [string]$SourcePath = "",
-        [bool]$IsNew = $false
-    )
-
-    try {
-
-        $name   = fncSafeString $TestMeta.Name
-        $catObj = $TestMeta.Category
-
-        if ($catObj -is [psobject] -and $catObj.PSObject.Properties.Name -contains "Primary") {
-            $cat = $catObj.Primary
-        }
-        else {
-            $cat = fncSafeString $catObj
-        }
-        $scopes = (@(fncSafeArray $TestMeta.Scopes) -join ", ")
-
-        $debugMode = $false
-        try { $debugMode = [bool]$global:ProberState.Config.DEBUG } catch {}
-
-        if ($debugMode -or $IsNew) {
-
-            if (fncCommandExists "fncPrintMessage") {
-
-                if ($IsNew) {
-                    fncPrintMessage ("New Test Module Loaded: {0}" -f $name) "success"
-                }
-                else {
-                    fncPrintMessage ("Loaded Test Module: {0}" -f $name) "debug"
-                }
-
-                Write-Host ("    > Category : {0}" -f $cat)
-                Write-Host ("    > Scopes   : {0}" -f $scopes)
-
-                if ($SourcePath) {
-                    Write-Host ("    > Path     : {0}" -f $SourcePath)
-                }
-            }
-            else {
-                Write-Host ("[+] Loaded Test Module: {0}" -f $name)
-            }
-        }
-
-        try {
-            if (fncCommandExists "fncLog") {
-                fncLog "INFO" ("Test module registered: {0} [{1}] ({2})" -f $name,$cat,$scopes)
-            }
-        } catch {}
-
-    }
-    catch {}
-}
-
-function fncNotifyTestModuleFailed {
-
-    param(
-        [string]$Name,
-        [string]$Reason,
-        [string]$Path
-    )
-
-    fncPrintMessage ("Test module failed validation: {0}" -f $Name) "warning"
-
-    Write-Host ("    > Reason : {0}" -f $Reason)
-    if ($Path) {
-        Write-Host ("    > Path   : {0}" -f $Path)
-    }
-
-    try { fncLog "WARN" ("Test module load failure: {0} - {1}" -f $Name,$Reason) } catch {}
-}
-
-function fncRegisterTest {
-    param(
-        [Parameter(Mandatory=$true)][string]$Id,
-        [Parameter(Mandatory=$true)][string]$Name,
-        [Parameter(Mandatory=$true)][string]$Function,
-
-        [object]$Category = "Uncategorised",
-
-        [ValidateSet("All","Workstation","Server","Domain","DMZ","Cloud","SaaS","Container","Network","WebApp")]
-        [string[]]$Scopes = @("All"),
-
-        [bool]$Enabled = $true,
-        [bool]$RequiresAdmin = $false,
-
-        [string]$Description = "",
-
-        # NEW
-        [int]$SchemaVersion = 1,
-        [object]$Mappings = $null,
-        [object]$References = $null
-    )
-
-    if ($null -eq $global:ProberState) {
-        throw "ProberState is not initialised. Call fncBootstrapProberState first."
-    }
-
-    if ($null -eq $global:ProberState.Tests) {
-        $global:ProberState.Tests = @()
-    }
-
-    # Remove existing test with same ID
-    $global:ProberState.Tests = @(
-        $global:ProberState.Tests |
-        Where-Object { (fncSafeString $_.Id) -ne (fncSafeString $Id) }
-    )
-
-    # -------------------------
-    # Normalise Category
-    # -------------------------
-    $normalisedCategory = "Uncategorised"
-
-    if ($Category -is [psobject] -and $Category.PSObject.Properties.Name -contains "Primary") {
-
-        $primary = fncSafeString $Category.Primary
-        if ([string]::IsNullOrWhiteSpace($primary)) {
-            $primary = "Uncategorised"
-        }
-
-        $subs = @()
-        if ($Category.PSObject.Properties.Name -contains "Subcategories") {
-            $subs = @(fncSafeArray $Category.Subcategories)
-        }
-
-        $normalisedCategory = [pscustomobject]@{
-            Primary       = $primary
-            Subcategories = $subs
-        }
-    }
-    else {
-        $c = fncSafeString $Category
-        if (-not [string]::IsNullOrWhiteSpace($c)) {
-            $normalisedCategory = $c
-        }
-    }
-
-    # -------------------------
-    # Store Test
-    # -------------------------
-    $global:ProberState.Tests += [pscustomobject]@{
-        SchemaVersion = [int]$SchemaVersion
-        Id            = (fncSafeString $Id)
-        Name          = (fncSafeString $Name)
-        Function      = (fncSafeString $Function)
-        Category      = $normalisedCategory
-        Scopes        = @(fncSafeArray $Scopes)
-        Enabled       = [bool]$Enabled
-        RequiresAdmin = [bool]$RequiresAdmin
-        Description   = (fncSafeString $Description)
-
-        # NEW
-        Mappings      = $Mappings
-        References    = $References
-    }
-
-    if (-not ($global:ProberState.PSObject.Properties.Name -contains "_LoadedTestIds")) {
-        $global:ProberState | Add-Member -NotePropertyName "_LoadedTestIds" -NotePropertyValue @()
-    }
-
-    if ($global:ProberState._LoadedTestIds -notcontains $Id) {
-        $global:ProberState._LoadedTestIds += $Id
-    }
-}
-
-function fncRescanTestModules {
-
-    try { fncPrintMessage "Rescanning test modules..." "info" } catch {}
-
-    $previousIds = @()
-    try {
-        if ($global:ProberState -and $global:ProberState.Tests) {
-            $previousIds = @(
-                fncSafeArray (
-                    $global:ProberState.Tests |
-                    ForEach-Object { fncSafeString $_.Id }
-                )
-            )
-        }
-    } catch {}
-
-    try {
-
-        if ($global:ProberState) {
-            $global:ProberState.Tests = @()
-        }
-
-    } catch {}
-
-    try {
-
-        $loaded = Get-Module | Where-Object {
-            $_.Path -and $_.Path -match "\\Tests\\"
-        }
-
-        foreach ($m in $loaded) {
-            try {
-                Remove-Module $m.Name -Force -ErrorAction SilentlyContinue
-            } catch {}
-        }
-
-    } catch {}
-
-    try {
-
-        fncDiscoverTests
-
-        $currentTests = fncSafeArray $global:ProberState.Tests
-        $count = fncSafeCount $currentTests
-
-        $newTests = @(
-            $currentTests |
-            Where-Object {
-                $previousIds -notcontains (fncSafeString $_.Id)
-            }
-        )
-
-        if ((fncSafeCount $newTests) -gt 0) {
-
-            try { fncPrintMessage "New test modules detected:" "success" } catch {}
-
-            foreach ($t in $newTests) {
-                try {
-                    Write-Host ("   + {0}" -f (fncSafeString $t.Name))
-                } catch {}
-            }
-
-            Write-Host ""
-        }
-
-        fncPrintMessage ("Rescan complete. Tests loaded: {0}" -f $count) "success"
-
-        try {
-            if (fncCommandExists "fncLog") {
-                fncLog "INFO" ("Test module rescan completed. Total tests: {0}, New tests: {1}" -f $count,(fncSafeCount $newTests))
-            }
-        } catch {}
-
-    }
-    catch {
-
-        try { fncPrintMessage ("Rescan failed: {0}" -f $_.Exception.Message) "error" } catch {}
-
-        try {
-            if (fncCommandExists "fncLog") {
-                fncLogException $_.Exception "fncRescanTestModules"
-            }
-        } catch {}
-    }
-}
-
+# ================================================================
+# Function: fncGetTestsRoot
+# Purpose : Resolve the Tests directory from the current modules path
+# Notes   : Expects modules\Registry.psm1 and sibling Tests\ folder
+# ================================================================
 function fncGetTestsRoot {
 
     try {
@@ -268,59 +19,146 @@ function fncGetTestsRoot {
         }
 
         $modulesRoot = fncGetScriptDirectory
-        if ([string]::IsNullOrWhiteSpace([string]$modulesRoot)) { return $null }
+        if ([string]::IsNullOrWhiteSpace($modulesRoot)) { return $null }
 
         $projectRoot = Split-Path -Path $modulesRoot -Parent
-        if ([string]::IsNullOrWhiteSpace([string]$projectRoot)) { return $null }
+        if ([string]::IsNullOrWhiteSpace($projectRoot)) { return $null }
 
-        $testsPath = Join-Path -Path $projectRoot -ChildPath "Tests"
+        $testsRoot = Join-Path $projectRoot "Tests"
 
-        try { if (fncCommandExists "fncLog") { fncLog "DEBUG" ("Resolved Tests root: {0}" -f $testsPath) } } catch {}
-
-        return $testsPath
+        try { fncLog "DEBUG" ("Resolved Tests root: {0}" -f $testsRoot) } catch {}
+        return $testsRoot
     }
     catch {
-        try { if (fncCommandExists "fncLog") { fncLogException $_.Exception "fncGetTestsRoot" } } catch {}
+        try { fncLogException $_.Exception "fncGetTestsRoot" } catch {}
         return $null
     }
 }
 
-function fncImportTestScript {
+# ================================================================
+# Function: fncGetPluginOSFromPath
+# Purpose : Infer the target OS from folder structure
+# Notes   : Example Tests\Defensive\Windows\* => Windows
+# ================================================================
+function fncGetPluginOSFromPath {
     param(
-        [Parameter(Mandatory=$true)][string]$FolderPath
+        [Parameter(Mandatory = $true)][string]$FolderPath,
+        [Parameter(Mandatory = $true)][string]$TestsRoot
     )
 
-    try { if (fncCommandExists "fncLog") { fncLog "DEBUG" ("Importing test script from: {0}" -f $FolderPath) } } catch {}
-
-    $moduleFile = Get-ChildItem -LiteralPath $FolderPath -Filter "test.psm1" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-    $scriptFile = Get-ChildItem -LiteralPath $FolderPath -Filter "test.ps1"  -File -ErrorAction SilentlyContinue | Select-Object -First 1
-
-    $target = $null
-    if ($moduleFile) { $target = $moduleFile.FullName }
-    elseif ($scriptFile) { $target = $scriptFile.FullName }
-
-    if ([string]::IsNullOrWhiteSpace([string]$target)) {
-        try { fncPrintMessage ("No test.ps1/test.psm1 found in: {0}" -f $FolderPath) "warning" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLog "WARN" ("No test script found in folder: {0}" -f $FolderPath) } } catch {}
-        return $false
-    }
-
     try {
-        Import-Module -Name $target -Force -ErrorAction Stop | Out-Null
-        try { if (fncCommandExists "fncLog") { fncLog "INFO" ("Imported test script: {0}" -f $target) } } catch {}
-        return $true
+        $relative = $FolderPath.Substring($TestsRoot.Length).TrimStart('\', '/')
+        $parts = @($relative -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+        foreach ($part in $parts) {
+            switch -Regex ($part) {
+                '^(Windows|Win)$' { return "Windows" }
+                '^(Linux)$' { return "Linux" }
+                '^(Mac|macOS|Darwin)$' { return "macOS" }
+                '^(Cloud)$' { return "Cloud" }
+                '^(Cross|Any|All)$' { return "Any" }
+            }
+        }
+
+        return "Any"
     }
     catch {
-        try { fncPrintMessage ("Failed importing test script: {0}" -f $target) "error" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLogException $_.Exception "fncImportTestScript" } } catch {}
-        return $false
+        return "Any"
     }
 }
 
-function fncResolveScopes {
+# ================================================================
+# Function: fncGetPluginStrategyFromPath
+# Purpose : Infer the strategy (Offensive/Defensive) from folder structure
+# Notes   : Example Tests\Defensive\* => Defensive
+# ================================================================
+function fncGetPluginStrategyFromPath {
     param(
-        [AllowNull()][object]$Scopes
+        [Parameter(Mandatory = $true)][string]$FolderPath,
+        [Parameter(Mandatory = $true)][string]$TestsRoot
     )
+
+    try {
+        $relative = $FolderPath.Substring($TestsRoot.Length).TrimStart('\', '/')
+        $parts = @($relative -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+        foreach ($part in $parts) {
+            switch -Regex ($part) {
+                '^Defensive$' { return "Defensive" }
+                '^Offensive$' { return "Offensive" }
+            }
+        }
+
+        return "Defensive"
+    }
+    catch {
+        return "Defensive"
+    }
+}
+
+# ================================================================
+# Function: fncGetPluginScopeFromPath
+# Purpose : Infer a default scope from folder structure
+# Notes   : Example Tests\Windows\* => Workstation/Server/Domain
+# ================================================================
+function fncGetPluginScopeFromPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$FolderPath,
+        [Parameter(Mandatory = $true)][string]$TestsRoot
+    )
+
+    try {
+        $relative = $FolderPath.Substring($TestsRoot.Length).TrimStart('\', '/')
+        $top = ($relative -split '[\\/]')[0]
+
+        switch -Regex ($top) {
+            '^(Windows|Win)$' { return @("Workstation", "Server", "Domain") }
+            '^AD$' { return @("Domain") }
+            '^(Cloud)$' { return @("Cloud") }
+            '^Containers?$' { return @("Container") }
+            '^Network$' { return @("Network") }
+            '^Web(App)?$' { return @("WebApp") }
+            '^DMZ$' { return @("DMZ") }
+            '^SaaS$' { return @("SaaS") }
+            default { return @("All") }
+        }
+    }
+    catch {
+        return @("All")
+    }
+}
+
+# ================================================================
+# Function: fncGetPluginCategoryFromPath
+# Purpose : Infer a category from relative folder structure
+# Notes   : Uses the second path element when available
+# ================================================================
+function fncGetPluginCategoryFromPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$FolderPath,
+        [Parameter(Mandatory = $true)][string]$TestsRoot
+    )
+
+    try {
+        $relative = $FolderPath.Substring($TestsRoot.Length).TrimStart('\', '/')
+        $parts = @($relative -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+        if ($parts.Count -ge 2) { return $parts[1] }
+        if ($parts.Count -ge 1) { return $parts[0] }
+        return "Uncategorised"
+    }
+    catch {
+        return "Uncategorised"
+    }
+}
+
+# ================================================================
+# Function: fncResolveScopes
+# Purpose : Normalise scopes from manifest or inferred values
+# Notes   : Returns All if Shared/All or no valid value present
+# ================================================================
+function fncResolveScopes {
+    param([AllowNull()][object]$Scopes)
 
     if ($null -eq $Scopes) { return @("All") }
 
@@ -340,278 +178,370 @@ function fncResolveScopes {
     return @($s)
 }
 
+# ================================================================
+# Function: fncImportPluginScript
+# Purpose : Import a plugin script from a test folder
+# Notes   : Supports test.psm1 first, then test.ps1
+# ================================================================
+function fncImportPluginScript {
+    param([Parameter(Mandatory = $true)][string]$FolderPath)
+
+    $moduleFile = Get-ChildItem -LiteralPath $FolderPath -Filter "test.psm1" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    $scriptFile = Get-ChildItem -LiteralPath $FolderPath -Filter "test.ps1"  -File -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    $target = $null
+    if ($moduleFile) { $target = $moduleFile.FullName }
+    elseif ($scriptFile) { $target = $scriptFile.FullName }
+
+    if ([string]::IsNullOrWhiteSpace($target)) {
+        try { fncLog "WARN" ("No test.psm1/test.ps1 found in: {0}" -f $FolderPath) } catch {}
+        return $false
+    }
+
+    try {
+        Import-Module -Name $target -Force -ErrorAction Stop | Out-Null
+        try { fncLog "INFO" ("Imported plugin script: {0}" -f $target) } catch {}
+        return $true
+    }
+    catch {
+        try { fncLogException $_.Exception "fncImportPluginScript" } catch {}
+        return $false
+    }
+}
+
+# ================================================================
+# Function: fncConvertManifestToTest
+# Purpose : Convert manifest JSON into a normalised runtime test object
+# Notes   : Falls back to folder structure when optional fields absent
+# ================================================================
+function fncConvertManifestToTest {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$FolderPath,
+        [Parameter(Mandatory = $true)][string]$TestsRoot
+    )
+
+    $id = fncSafeGetProp $Manifest "Id" ""
+    $name = fncSafeGetProp $Manifest "Name" ""
+    $function = fncSafeGetProp $Manifest "Function" ""
+
+    if ([string]::IsNullOrWhiteSpace($id)) { throw "Manifest missing Id: $FolderPath" }
+    if ([string]::IsNullOrWhiteSpace($name)) { throw "Manifest missing Name: $FolderPath" }
+    if ([string]::IsNullOrWhiteSpace($function)) { throw "Manifest missing Function: $FolderPath" }
+
+    $category = fncSafeGetProp $Manifest "Category" $null
+    if ($null -eq $category -or [string]::IsNullOrWhiteSpace((fncSafeString $category))) {
+        $category = fncGetPluginCategoryFromPath -FolderPath $FolderPath -TestsRoot $TestsRoot
+    }
+
+    $scopes = fncSafeGetProp $Manifest "Scopes" $null
+    if ($null -eq $scopes) {
+        $scopes = fncGetPluginScopeFromPath -FolderPath $FolderPath -TestsRoot $TestsRoot
+    }
+    $scopes = fncResolveScopes $scopes
+
+    $os = fncSafeString (fncSafeGetProp $Manifest "OS" "")
+    if ([string]::IsNullOrWhiteSpace($os)) {
+        $os = fncGetPluginOSFromPath -FolderPath $FolderPath -TestsRoot $TestsRoot
+    }
+
+    $strategy = fncSafeString (fncSafeGetProp $Manifest "Strategy" "")
+    if ([string]::IsNullOrWhiteSpace($strategy)) {
+        $strategy = fncGetPluginStrategyFromPath -FolderPath $FolderPath -TestsRoot $TestsRoot
+    }
+
+    return [pscustomobject]@{
+        SchemaVersion = [int](fncSafeGetProp $Manifest "SchemaVersion" 1)
+        Id            = $id
+        Name          = $name
+        Function      = $function
+        Category      = $category
+        Scopes        = @($scopes)
+        Enabled       = [bool](fncSafeGetProp $Manifest "Enabled" $true)
+        RequiresAdmin = [bool](fncSafeGetProp $Manifest "RequiresAdmin" $false)
+        Description   = fncSafeString (fncSafeGetProp $Manifest "Description" "")
+        WIP           = [bool](fncSafeGetProp $Manifest "WIP" $false)
+        Mappings      = $null
+        References    = fncSafeGetProp $Manifest "References" $null
+        Path          = $FolderPath
+        Maturity      = fncSafeGetProp $Manifest "Maturity" "Experimental"
+        Risk          = fncSafeGetProp $Manifest "Risk" "Low"
+        OS            = $os
+        Strategy      = $strategy
+    }
+}
+
+# ================================================================
+# Function: fncRegisterDiscoveredTest
+# Purpose : Add a single test object to ProberState (dynamic / reload use)
+# Notes   : For bulk initial load use fncDiscoverTests which assigns once
+# ================================================================
+function fncRegisterDiscoveredTest {
+    param([Parameter(Mandatory = $true)]$Test)
+
+    if ($null -eq $global:ProberState.Tests) {
+        $global:ProberState.Tests = @()
+    }
+
+    # Use a hashtable for O(1) duplicate check rather than a Where-Object scan
+    if (-not ($global:ProberState.PSObject.Properties.Name -contains "_TestIdSet")) {
+        $global:ProberState | Add-Member -NotePropertyName "_TestIdSet" -NotePropertyValue @{}
+    }
+
+    $id = fncSafeString $Test.Id
+
+    if ($global:ProberState._TestIdSet.ContainsKey($id)) {
+        # Replace existing entry (reload scenario)
+        $global:ProberState.Tests = @($global:ProberState.Tests | Where-Object { (fncSafeString $_.Id) -ne $id })
+    }
+
+    $global:ProberState.Tests += $Test
+    $global:ProberState._TestIdSet[$id] = $true
+
+    if (-not ($global:ProberState.PSObject.Properties.Name -contains "_LoadedTestIds")) {
+        $global:ProberState | Add-Member -NotePropertyName "_LoadedTestIds" -NotePropertyValue @()
+    }
+
+    if ($global:ProberState._LoadedTestIds -notcontains $id) {
+        $global:ProberState._LoadedTestIds += $id
+    }
+}
+
+# ================================================================
+# Function: fncDiscoverTests
+# Purpose : Discover all tests from filesystem manifests
+# Notes   : Tests\Windows\*, Tests\AD\*, Tests\Cloud\*, etc
+# ================================================================
 function fncDiscoverTests {
 
-    $loadedCount = 0
-    $failedCount = 0
-
-    $debugMode = $false
-    try {
-        if ($global:ProberState -and
-            $global:ProberState.PSObject.Properties.Name -contains "Config" -and
-            $global:ProberState.Config -and
-            $global:ProberState.Config.PSObject.Properties.Name -contains "DEBUG") {
-
-            $debugMode = [bool]$global:ProberState.Config.DEBUG
-        }
-    } catch {}
-
-    $existingIds = @()
-    try {
-        if ($global:ProberState -and $global:ProberState.Tests) {
-            $existingIds = @(
-                fncSafeArray (
-                    $global:ProberState.Tests |
-                    ForEach-Object { fncSafeString $_.Id }
-                )
-            )
-        }
-    } catch {}
-
-    try { if (fncCommandExists "fncLog") { fncLog "INFO" "Starting dynamic test discovery" } } catch {}
+    $loadedCount  = 0
+    $skippedCount = 0
+    $failedCount  = 0
+    $batch        = [System.Collections.Generic.List[object]]::new()
 
     $testsRoot = fncGetTestsRoot
-
-    if ([string]::IsNullOrWhiteSpace([string]$testsRoot) -or -not (Test-Path -LiteralPath $testsRoot)) {
+    if ([string]::IsNullOrWhiteSpace($testsRoot) -or -not (Test-Path -LiteralPath $testsRoot)) {
         try { fncPrintMessage ("Tests directory not found: {0}" -f (fncSafeString $testsRoot)) "warning" } catch {}
         return
     }
 
-    $jsonFiles = Get-ChildItem -LiteralPath $testsRoot -Filter "test.json" -File -Recurse -ErrorAction SilentlyContinue
+    # Detect current OS once - avoid per-test calls
+    $_currentOS = "Windows"
+    try {
+        if (Get-Command fncGetCurrentOS -ErrorAction SilentlyContinue) {
+            $_currentOS = fncGetCurrentOS
+        }
+        elseif (Get-Variable IsLinux -ErrorAction SilentlyContinue) {
+            if ($IsLinux)  { $_currentOS = "Linux" }
+            elseif ($IsMacOS) { $_currentOS = "macOS" }
+        }
+    }
+    catch {}
 
-    foreach ($jf in (fncSafeArray $jsonFiles)) {
+    try { fncLog "INFO" ("Starting plugin discovery from: {0} (OS: {1})" -f $testsRoot, $_currentOS) } catch {}
 
-        $folder   = $jf.Directory.FullName
-        $jsonPath = $jf.FullName
+    $manifestFiles = Get-ChildItem -LiteralPath $testsRoot -Filter "test.json" -File -Recurse -ErrorAction SilentlyContinue
 
-        # -----------------------------
-        # Load JSON
-        # -----------------------------
-        $meta = $null
+    foreach ($manifestFile in (fncSafeArray $manifestFiles)) {
+
+        $folder   = $manifestFile.Directory.FullName
+        $manifest = $null
+
         try {
-            $meta = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
+            $manifest = fncReadJsonFileSafe $manifestFile.FullName $null
+
+            if ($null -eq $manifest) {
+                $failedCount++
+                fncLog "WARN" ("Invalid or empty manifest skipped: {0}" -f $manifestFile.FullName)
+                continue
+            }
         }
         catch {
-            try { fncPrintMessage ("Invalid JSON: {0}" -f $jsonPath) "error" } catch {}
-            continue
-        }
-
-        if (-not $meta) { continue }
-
-        # -----------------------------
-        # Required fields
-        # -----------------------------
-        $id = ""
-        $nm = ""
-        $fn = ""
-
-        if ($meta.PSObject.Properties.Name -contains "Id")        { $id = fncSafeString $meta.Id }
-        if ($meta.PSObject.Properties.Name -contains "Name")      { $nm = fncSafeString $meta.Name }
-        if ($meta.PSObject.Properties.Name -contains "Function")  { $fn = fncSafeString $meta.Function }
-
-        if ([string]::IsNullOrWhiteSpace($id) -or
-            [string]::IsNullOrWhiteSpace($nm) -or
-            [string]::IsNullOrWhiteSpace($fn)) {
-
-            try { fncPrintMessage ("Test metadata missing required fields: {0}" -f $jsonPath) "error" } catch {}
-            continue
-        }
-
-        # -----------------------------
-        # Import Script
-        # -----------------------------
-        if (-not (fncImportTestScript -FolderPath $folder)) {
-            fncNotifyTestModuleFailed $nm "Script import failed" $folder
             $failedCount++
+            try { fncPrintMessage ("Invalid manifest: {0}" -f $manifestFile.FullName) "error" } catch {}
+            try { fncLogException $_.Exception "fncDiscoverTests manifest parse" } catch {}
             continue
         }
 
-        if (-not (Get-Command -Name $fn -ErrorAction SilentlyContinue)) {
-            try { fncPrintMessage ("Function not found after import: {0} ({1})" -f $fn,$jsonPath) "error" } catch {}
+        try {
+            $test = fncConvertManifestToTest -Manifest $manifest -FolderPath $folder -TestsRoot $testsRoot
+        }
+        catch {
+            $failedCount++
+            try { fncPrintMessage $_.Exception.Message "error" } catch {}
             continue
         }
 
-        # -----------------------------
-        # Safe SchemaVersion
-        # -----------------------------
-        $schema = 1
-        if ($meta.PSObject.Properties.Name -contains "SchemaVersion") {
-            try { $schema = [int]$meta.SchemaVersion } catch { $schema = 1 }
+        # Skip tests whose OS doesn't match the current platform - avoids
+        # importing irrelevant modules (e.g. Linux tests on Windows) which
+        # is the primary startup cost when many test plugins are present.
+        $testOS = fncSafeString $test.OS
+        if ($testOS -ne "Any" -and $testOS -ne "" -and $testOS -ne $_currentOS) {
+            $skippedCount++
+            try { fncLog "DEBUG" ("Skipping OS-mismatched test [{0}]: {1}" -f $testOS, $test.Id) } catch {}
+            continue
         }
 
-        # -----------------------------
-        # Safe Category
-        # -----------------------------
-        $cat = "Uncategorised"
-
-        if ($meta.PSObject.Properties.Name -contains "Category") {
-
-            $rawCat = $meta.Category
-
-            if ($rawCat -is [string]) {
-                if (-not [string]::IsNullOrWhiteSpace($rawCat)) {
-                    $cat = $rawCat
-                }
-            }
-            elseif ($rawCat -is [psobject] -and
-                    $rawCat.PSObject.Properties.Name -contains "Primary") {
-
-                $primary = fncSafeString $rawCat.Primary
-                if ([string]::IsNullOrWhiteSpace($primary)) {
-                    $primary = "Uncategorised"
-                }
-
-                $subs = @()
-                if ($rawCat.PSObject.Properties.Name -contains "Subcategories") {
-                    $subs = @(fncSafeArray $rawCat.Subcategories)
-                }
-
-                $cat = [pscustomobject]@{
-                    Primary       = $primary
-                    Subcategories = $subs
-                }
-            }
+        if (-not (fncImportPluginScript -FolderPath $folder)) {
+            $failedCount++
+            try { fncPrintMessage ("Plugin import failed: {0}" -f $test.Name) "warning" } catch {}
+            continue
         }
 
-        # -----------------------------
-        # Optional properties
-        # -----------------------------
-        $enabled  = $true
-        $reqAdmin = $false
-        $desc     = ""
-        $mappings = $null
-        $refs     = $null
+        # Load mappings from psm1 function now that the module is imported
+        $mappingsFn = "fncGetMappings_{0}" -f ($test.Id -replace '-', '_')
+        if (Get-Command $mappingsFn -ErrorAction SilentlyContinue) {
+            try { $test.Mappings = & $mappingsFn } catch {}
+        }
 
-        if ($meta.PSObject.Properties.Name -contains "Enabled")        { try { $enabled  = [bool]$meta.Enabled } catch {} }
-        if ($meta.PSObject.Properties.Name -contains "RequiresAdmin")  { try { $reqAdmin = [bool]$meta.RequiresAdmin } catch {} }
-        if ($meta.PSObject.Properties.Name -contains "Description")    { try { $desc     = fncSafeString $meta.Description } catch {} }
-        if ($meta.PSObject.Properties.Name -contains "Mappings")       { $mappings = $meta.Mappings }
-        if ($meta.PSObject.Properties.Name -contains "References")     { $refs     = $meta.References }
+        if (-not (Get-Command -Name $test.Function -ErrorAction SilentlyContinue)) {
+            $failedCount++
+            try { fncPrintMessage ("Function not found after import: {0}" -f $test.Function) "error" } catch {}
+            continue
+        }
 
-        $scopes = fncResolveScopes -Scopes $meta.Scopes
-
-        # -----------------------------
-        # Register
-        # -----------------------------
-        fncRegisterTest `
-            -Id $id `
-            -Name $nm `
-            -Function $fn `
-            -Category $cat `
-            -Scopes $scopes `
-            -Enabled $enabled `
-            -RequiresAdmin $reqAdmin `
-            -Description $desc `
-            -SchemaVersion $schema `
-            -Mappings $mappings `
-            -References $refs
-
+        $batch.Add($test)
         $loadedCount++
+
+        try {
+            if ($global:ProberState.Config.DEBUG) {
+                fncPrintMessage ("Loaded Test: {0}" -f $test.Name) "debug"
+            }
+        }
+        catch {}
+    }
+
+    # Bulk-assign to avoid O(n²) array appends inside the loop
+    if ($batch.Count -gt 0) {
+        $global:ProberState.Tests = $batch.ToArray()
+
+        if (-not ($global:ProberState.PSObject.Properties.Name -contains "_TestIdSet")) {
+            $global:ProberState | Add-Member -NotePropertyName "_TestIdSet" -NotePropertyValue @{}
+        }
+        if (-not ($global:ProberState.PSObject.Properties.Name -contains "_LoadedTestIds")) {
+            $global:ProberState | Add-Member -NotePropertyName "_LoadedTestIds" -NotePropertyValue @()
+        }
+        foreach ($t in $batch) {
+            $tid = fncSafeString $t.Id
+            $global:ProberState._TestIdSet[$tid] = $true
+            if ($global:ProberState._LoadedTestIds -notcontains $tid) {
+                $global:ProberState._LoadedTestIds += $tid
+            }
+        }
     }
 
     try {
-        if ($debugMode) {
-            fncPrintMessage ("Test Modules Loaded: {0}" -f $loadedCount) "success"
-            if ($failedCount -gt 0) {
-                fncPrintMessage ("Modules Failed Validation: {0}" -f $failedCount) "warning"
-            }
-        }
-    } catch {}
+        fncLog "INFO" ("Plugin discovery complete. Loaded={0}, Skipped(OS)={1}, Failed={2}" -f $loadedCount, $skippedCount, $failedCount)
+    }
+    catch {}
 }
 
+# ================================================================
+# Function: fncRegisterTests
+# Purpose : Build the in-memory test registry from discovered plugins
+# Notes   : Leaves a NOOP fallback if no tests are found
+# ================================================================
 function fncRegisterTests {
 
     if ($null -eq $global:ProberState) {
-        if (fncCommandExists "fncLog") { fncLog "ERROR" "ProberState not initialised before fncRegisterTests" }
-        throw "ProberState is not initialised. Call fncBootstrapProberState first."
+        throw "ProberState is not initialised."
     }
 
     $global:ProberState.Tests = @()
-
     fncDiscoverTests
 
     if ((fncSafeCount $global:ProberState.Tests) -eq 0) {
-
-        try { if (fncCommandExists "fncLog") { fncLog "WARN" "No tests discovered during registry scan" } } catch {}
 
         function fncNoOpTest {
             try { fncPrintMessage "No tests discovered." "warning" } catch { Write-Host "No tests discovered." }
         }
 
-        fncRegisterTest `
-            -Id "NOOP" `
-            -Name "No tests discovered" `
-            -Function "fncNoOpTest" `
-            -Category "Utilities" `
-            -Scopes @("All") `
-            -Enabled $true `
-            -RequiresAdmin $false
+        $global:ProberState.Tests += [pscustomobject]@{
+            SchemaVersion = 6
+            Id            = "NOOP"
+            Name          = "No tests discovered"
+            Function      = "fncNoOpTest"
+            Category      = "Utilities"
+            Scopes        = @("All")
+            Enabled       = $true
+            RequiresAdmin = $false
+            Description   = "Fallback placeholder"
+            WIP           = $false
+            Mappings      = $null
+            References    = $null
+            Path          = ""
+            OS            = "Any"
+            Strategy      = "Defensive"
+        }
     }
 
     try {
-        fncPrintMessage ("Registered tests: {0}" -f (fncSafeCount $global:ProberState.Tests)) "debug"
-        if (fncCommandExists "fncLog") { fncLog "INFO" ("Registered tests: {0}" -f (fncSafeCount $global:ProberState.Tests)) }
-    } catch {}
+        fncLog "INFO" ("Registered tests: {0}" -f (fncSafeCount $global:ProberState.Tests))
+    }
+    catch {}
+}
+
+# ================================================================
+# Function: fncGetUniqueCategories
+# Purpose : Return unique primary categories for current scope
+# Notes   : Works with string or structured category objects
+# ================================================================
+function fncGetActiveStrategy {
+    try {
+        $s = fncSafeString (fncSafeGetProp $global:ProberState.Config "Strategy" "red")
+        if ($s -eq "blue") { return "Defensive" }
+        return "All"
+    }
+    catch { return "All" }
 }
 
 function fncGetUniqueCategories {
-
     param(
-        [ValidateSet('All','Workstation','Server','Domain','DMZ','Cloud','SaaS','Container','Network','WebApp')]
+        [ValidateSet('All', 'Workstation', 'Server', 'Domain', 'DMZ', 'Cloud', 'SaaS', 'Container', 'Network', 'WebApp', 'Entra', 'Azure', 'AWS')]
         [string]$Scope = "All"
     )
 
     $tests = fncSafeArray $global:ProberState.Tests
     if ((fncSafeCount $tests) -eq 0) { return @() }
 
-    $cats = @()
+    $activeStrategy = fncGetActiveStrategy
 
-    try {
-
-        $cats = @(
-            $tests |
-            Where-Object {
-                $_ -and
-                $_.Enabled -eq $true -and
-                (
-                    $Scope -eq "All" -or
-                    @(fncSafeArray $_.Scopes) -contains $Scope
-                )
-            } |
-            ForEach-Object {
-
-                $catObj = $_.Category
-
-                # New structured format
-                if ($catObj -is [psobject] -and $catObj.PSObject.Properties.Name -contains "Primary") {
-
-                    $primary = fncSafeString $catObj.Primary
-
-                    if ([string]::IsNullOrWhiteSpace($primary)) {
-                        "Uncategorised"
-                    }
-                    else {
-                        $primary
-                    }
-                }
-                else {
-                    # Legacy string format
-                    $c = fncSafeString $catObj
-                    if ([string]::IsNullOrWhiteSpace($c)) { "Uncategorised" }
-                    else { $c }
-                }
+    $cats = @(
+        $tests |
+        Where-Object {
+            $_ -and $_.Enabled -eq $true -and
+            ($activeStrategy -eq "All" -or (fncSafeString $_.Strategy) -eq $activeStrategy) -and
+            (
+                $Scope -eq "All" -or
+                @(fncSafeArray $_.Scopes) -contains "All" -or
+                @(fncSafeArray $_.Scopes) -contains $Scope
+            )
+        } |
+        ForEach-Object {
+            $catObj = $_.Category
+            if ($catObj -is [psobject] -and $catObj.PSObject.Properties.Name -contains "Primary") {
+                fncSafeString $catObj.Primary
             }
-        )
+            else {
+                fncSafeString $catObj
+            }
+        } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique
+    )
 
-    } catch { $cats = @() }
-
-    return @($cats | Sort-Object -Unique)
+    return @($cats)
 }
 
+# ================================================================
+# Function: fncGetTestsByScope
+# Purpose : Return tests filtered by scope/category
+# Notes   : Uses inferred or manifest-provided scopes
+# ================================================================
 function fncGetTestsByScope {
     param(
-        [Parameter(Mandatory=$true)]
-        [ValidateSet('All','Workstation','Server','Domain','DMZ','Cloud','SaaS','Container','Network','WebApp')]
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('All', 'Workstation', 'Server', 'Domain', 'DMZ', 'Cloud', 'SaaS', 'Container', 'Network', 'WebApp', 'Entra', 'Azure', 'AWS')]
         [string]$Scope,
 
         [string]$Category = "",
@@ -619,167 +549,188 @@ function fncGetTestsByScope {
         [switch]$IncludeDisabled
     )
 
-    try {
-        if (fncCommandExists "fncLog") {
-            fncLog "DEBUG" ("Querying tests by scope: {0}, Category: {1}" -f $Scope,$Category)
-        }
-    } catch {}
-
     $tests = fncSafeArray $global:ProberState.Tests
     if ((fncSafeCount $tests) -eq 0) { return @() }
 
-    # ---------------------------------------------
-    # Filter disabled tests (unless requested)
-    # ---------------------------------------------
     if (-not $IncludeDisabled) {
-        $tests = fncSafeArray (
-            $tests | Where-Object {
-                $_ -and
-                $_.Enabled -eq $true
-            }
-        )
+        $tests = @($tests | Where-Object { $_ -and $_.Enabled -eq $true })
     }
 
-    # ---------------------------------------------
-    # Build effective scope mapping
-    # ---------------------------------------------
-    $effectiveScopes = switch ($Scope) {
-
-        "All"         { @("All","Workstation","Server","Domain","DMZ","Cloud","SaaS","Container","Network","WebApp") }
-        "Workstation" { @("Workstation","Domain","All") }
-        "Server"      { @("Server","Domain","All") }
-        "Domain"      { @("Domain","All") }
-        "DMZ"         { @("DMZ","All") }
-
-        "Cloud"       { @("Cloud","All") }
-        "SaaS"        { @("SaaS","Cloud","All") }
-        "Container"   { @("Container","Server","Cloud","All") }
-        "Network"     { @("Network","DMZ","All") }
-        "WebApp"      { @("WebApp","DMZ","Server","Cloud","All") }
+    $activeStrategy = fncGetActiveStrategy
+    if ($activeStrategy -ne "All") {
+        $tests = @($tests | Where-Object { $_ -and (fncSafeString $_.Strategy) -eq $activeStrategy })
     }
 
-    # ---------------------------------------------
-    # Scope Filtering
-    # ---------------------------------------------
     if ($Scope -ne "All") {
-
-        $tests = fncSafeArray (
+        $tests = @(
             $tests | Where-Object {
-
-                $_ -and
-                $_.Scopes -and
-                (
-                    $_.Scopes -contains "All" -or
-                    (@(fncSafeArray $_.Scopes) | Where-Object { $effectiveScopes -contains $_ })
+                $_ -and $_.Scopes -and (
+                    @(fncSafeArray $_.Scopes) -contains "All" -or
+                    @(fncSafeArray $_.Scopes) -contains $Scope
                 )
             }
         )
     }
 
-    # ---------------------------------------------
-    # Category Filtering (Structured + Legacy Safe)
-    # ---------------------------------------------
     if (-not [string]::IsNullOrWhiteSpace($Category)) {
-
-        $tests = fncSafeArray (
+        $tests = @(
             $tests | Where-Object {
-
-                if (-not $_ -or -not $_.Category) { return $false }
-
                 $catObj = $_.Category
-
-                # New structured format
                 if ($catObj -is [psobject] -and $catObj.PSObject.Properties.Name -contains "Primary") {
                     (fncSafeString $catObj.Primary) -eq (fncSafeString $Category)
                 }
                 else {
-                    # Legacy string format
                     (fncSafeString $catObj) -eq (fncSafeString $Category)
                 }
             }
         )
     }
 
-    return $tests
+    return @($tests)
 }
 
-function fncInvokeTestById {
+# ================================================================
+# Function: fncExecTestCmd  (module-level private)
+# Purpose : Executes a single test command with error handling
+# Notes   : Extracted from fncInvokeTestById to avoid per-call redefinition
+# ================================================================
+function fncExecTestCmd {
     param(
-        [Parameter(Mandatory=$true)][string]$TestId
+        [string]$ModeLabel,
+        $Test,
+        $Command,
+        [string]$TestId
     )
 
-    try { if (fncCommandExists "fncLog") { fncLog "INFO" ("Invoking test by Id: {0}" -f $TestId) } } catch {}
-
-    $tests = fncSafeArray $global:ProberState.Tests
-    $t = @(
-        $tests | Where-Object {
-            $_ -and
-            $_.PSObject.Properties.Name -contains "Id" -and
-            (fncSafeString $_.Id) -eq (fncSafeString $TestId)
-        }
-    ) | Select-Object -First 1
-
-    if ($null -eq $t) {
-        try { fncPrintMessage ("Unknown test id: {0}" -f $TestId) "warning" } catch { Write-Host ("Unknown test id: {0}" -f $TestId) }
-        try { if (fncCommandExists "fncLog") { fncLog "WARN" ("Unknown test id: {0}" -f $TestId) } } catch {}
-        return
-    }
-
-    $needsAdmin = $false
-    try {
-        if ($t.PSObject.Properties.Name -contains "RequiresAdmin") { $needsAdmin = [bool]$t.RequiresAdmin }
-    } catch { $needsAdmin = $false }
-
-    if ($needsAdmin) {
-        $isAdmin = $false
-        try {
-            if (fncCommandExists "fncIsAdmin") { $isAdmin = [bool](fncIsAdmin) }
-        } catch { $isAdmin = $false }
-
-        if (-not $isAdmin) {
-            try { fncPrintMessage ("Test requires Administrator: {0}" -f (fncSafeString $t.Name)) "warning" } catch {}
-            try { if (fncCommandExists "fncLog") { fncLog "WARN" ("Admin required for test: {0}" -f (fncSafeString $t.Id)) } } catch {}
-            return
-        }
-    }
-
-    $fn = ""
-    try { if ($t.PSObject.Properties.Name -contains "Function") { $fn = fncSafeString $t.Function } } catch { $fn = "" }
-
-    if ([string]::IsNullOrWhiteSpace($fn)) {
-        try { fncPrintMessage ("Test has no function mapped: {0}" -f (fncSafeString $t.Name)) "warning" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLog "WARN" ("No function mapped for test: {0}" -f (fncSafeString $t.Id)) } } catch {}
-        return
-    }
-
-    $cmd = Get-Command -Name $fn -ErrorAction SilentlyContinue
-    if ($null -eq $cmd) {
-        try { fncPrintMessage ("Mapped function not found: {0}" -f $fn) "warning" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLog "ERROR" ("Mapped function not found: {0}" -f $fn) } } catch {}
-        return
-    }
-
-    try { fncPrintMessage ("Running: {0}" -f (fncSafeString $t.Name)) "info" } catch {}
+    $oldPref = $ErrorActionPreference
+    $ErrorActionPreference = "Stop"
 
     try {
-        & $fn
-        try { fncPrintMessage ("Completed: {0}" -f (fncSafeString $t.Name)) "success" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLog "INFO" ("Completed test: {0}" -f (fncSafeString $t.Id)) } } catch {}
+        fncPrintMessage ("{0}: {1}" -f $ModeLabel, (fncSafeString $Test.Name)) "info"
+        & $Command -ErrorAction Stop
+        fncPrintMessage ("Completed [{0}]: {1}" -f $ModeLabel, (fncSafeString $Test.Name)) "success"
     }
     catch {
-        try { fncPrintMessage ("Test failed: {0}" -f $_.Exception.Message) "error" } catch {}
-        try { if (fncCommandExists "fncLog") { fncLogException $_.Exception ("Test failed [{0}]" -f (fncSafeString $t.Id)) } } catch {}
+        fncPrintMessage ("Test execution failed: {0}" -f $_.Exception.Message) "error"
+
+        fncLog "ERROR" "===== TEST FAILURE ====="
+        fncLog "ERROR" ("Test Id   : {0}" -f $TestId)
+        fncLog "ERROR" ("Test Name : {0}" -f (fncSafeString $Test.Name))
+        fncLog "ERROR" ("Mode      : {0}" -f $ModeLabel)
+        fncLog "ERROR" ("Message   : {0}" -f $_.Exception.Message)
+
+        if ($_.InvocationInfo) {
+            fncLog "ERROR" ("Script : {0}" -f $_.InvocationInfo.ScriptName)
+            fncLog "ERROR" ("Line   : {0}" -f $_.InvocationInfo.ScriptLineNumber)
+            fncLog "ERROR" ("Code   : {0}" -f $_.InvocationInfo.Line.Trim())
+        }
+
+        if ($_.ScriptStackTrace) {
+            fncLog "ERROR" $_.ScriptStackTrace
+        }
+    }
+    finally {
+        $ErrorActionPreference = $oldPref
+    }
+}
+
+# ================================================================
+# Function: fncInvokeTestById
+# Purpose : Execute a discovered plugin test by Id
+# Notes   : Preserves admin enforcement and logging
+# ================================================================
+function fncInvokeTestById {
+
+    param([Parameter(Mandatory = $true)][string]$TestId)
+
+    $id = $TestId
+
+    # Ensure execution history exists
+    if (-not $global:ProberState.ExecutionHistory) {
+        $global:ProberState.ExecutionHistory = @{}
+    }
+
+    if (-not $global:ProberState.ExecutionHistory.ContainsKey($id)) {
+
+        $global:ProberState.ExecutionHistory[$id] = @{
+            RunCount = 0
+        }
+    }
+
+    $entry = $global:ProberState.ExecutionHistory[$id]
+
+    $entry.RunCount++
+    $entry.LastRun = Get-Date
+    # History is flushed once per session in fncMain's finally block
+
+    $tests = fncSafeArray $global:ProberState.Tests
+    $t = @($tests | Where-Object { (fncSafeString $_.Id) -eq (fncSafeString $TestId) }) | Select-Object -First 1
+
+
+    if ($null -eq $t) {
+        fncPrintMessage ("Unknown test id: {0}" -f $TestId) "warning"
+        return
+    }
+
+
+    $needsAdmin = [bool](fncSafeGetProp $t "RequiresAdmin" $false)
+
+    if ($needsAdmin -and -not (fncIsAdmin)) {
+        fncPrintMessage ("Test requires Administrator: {0}" -f (fncSafeString $t.Name)) "warning"
+        return
+    }
+
+
+    $fn = fncSafeString (fncSafeGetProp $t "Function" "")
+
+    if ([string]::IsNullOrWhiteSpace($fn)) {
+        fncPrintMessage ("Test has no function mapped: {0}" -f (fncSafeString $t.Name)) "warning"
+        return
+    }
+
+
+    $cmd = Get-Command $fn -ErrorAction SilentlyContinue
+
+    if (-not $cmd) {
+        fncPrintMessage ("Mapped function not found: {0}" -f $fn) "warning"
+        return
+    }
+
+
+    $operatorStrategy = fncSafeString (fncSafeGetProp $global:ProberState.Config "Strategy" "red")
+
+    fncExecTestCmd -ModeLabel $operatorStrategy -Test $t -Command $cmd -TestId $id
+}
+
+# ================================================================
+# Function: fncRescanTestModules
+# Purpose : Reload all test plugins at runtime without restarting
+# ================================================================
+function fncRescanTestModules {
+
+    try { fncTestMessage "Reloading test modules..." "link" } catch { Write-Host "Reloading test modules..." }
+
+    $before = (fncSafeCount $global:ProberState.Tests)
+
+    fncRegisterTests
+
+    $after = (fncSafeCount $global:ProberState.Tests)
+
+    try {
+        fncTestMessage ("Reload complete. Tests loaded: {0} (was {1})" -f $after, $before) "link"
+    }
+    catch {
+        Write-Host ("Reload complete. Tests loaded: {0} (was {1})" -f $after, $before)
     }
 }
 
 Export-ModuleMember -Function @(
-    "fncRegisterTest",
     "fncRegisterTests",
     "fncDiscoverTests",
     "fncGetUniqueCategories",
     "fncGetTestsByScope",
     "fncInvokeTestById",
     "fncGetTestsRoot",
-    "fncNotifyTestModuleLoaded",
-    "fncRescanTestModules"
+    "fncRescanTestModules",
+    "fncGetActiveStrategy"
 )
