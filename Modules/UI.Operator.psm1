@@ -1220,7 +1220,7 @@ function fncPrintLinuxRiskBanner {
                 default      { "DarkGray"   }
             }
             $matched = (fncSafeArray $ev.Evidence).Count
-            $sigStr  = "{0} {1}" -f $matched, (if ($matched -eq 1) { "signal" } else { "signals" })
+            $sigStr  = "{0} {1}" -f $matched, $(if ($matched -eq 1) { "signal" } else { "signals" })
             fncWriteColour ("  {0,-40}" -f $ev.Product) $nameCol -NoNewLine
             fncWriteColour ("{0,-14}" -f $conf) $nameCol -NoNewLine
             fncWriteColour $sigStr DarkGray

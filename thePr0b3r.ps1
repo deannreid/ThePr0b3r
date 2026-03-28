@@ -187,7 +187,7 @@ if ($ShowVersion) {
 
     Write-Host ""
     Write-Host "THE Pr0b3r Framework"
-    Write-Host "Version: 4.2.0"
+    Write-Host "Version: 4.2.1"
     Write-Host ""
     return
 }

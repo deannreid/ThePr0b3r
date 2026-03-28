@@ -152,10 +152,10 @@ function fncShowMainMenu {
         }
 
         if ($azureStatus -eq "not-found") {
-            fncRenderMenuOptionNA "AZ" "Azure Subscription Console" "module not found"
+            fncRenderMenuOptionNA "AZ" "Azure Console" "module not found"
         }
         else {
-            fncRenderMenuOptionWip "AZ" "Azure Subscription Console"
+            fncRenderMenuOptionWip "AZ" "Azure Console"
         }
 
         if ($cisStatus -eq "not-found") {
